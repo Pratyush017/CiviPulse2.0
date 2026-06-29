@@ -1,0 +1,39 @@
+import type { Metadata } from "next";
+import { Inter, Space_Grotesk } from "next/font/google";
+import "./globals.css";
+
+const inter = Inter({
+  variable: "--font-inter",
+  subsets: ["latin"],
+});
+
+const spaceGrotesk = Space_Grotesk({
+  variable: "--font-space-grotesk",
+  subsets: ["latin"],
+});
+
+export const metadata: Metadata = {
+  title: "CivicPulse — Community Issue Tracker",
+  description:
+    "Report and track civic issues in your community. AI-powered classification and severity analysis.",
+};
+
+import { ClickSpark } from "@/components/ui/ClickSpark";
+
+export default function RootLayout({
+  children,
+}: Readonly<{
+  children: React.ReactNode;
+}>) {
+  return (
+    <html
+      lang="en"
+      className={`${inter.variable} ${spaceGrotesk.variable} h-full antialiased font-sans`}
+    >
+      <body className="min-h-full flex flex-col">
+        {children}
+        <ClickSpark sparkColors={["#2dd4bf"]} sparkCount={10} />
+      </body>
+    </html>
+  );
+}

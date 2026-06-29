@@ -1,0 +1,6 @@
+{
+  "name": "Civic Guard",
+  "description": "AI-powered citizen incident reporting, verification, and community gamification.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
