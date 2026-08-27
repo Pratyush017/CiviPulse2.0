@@ -9,10 +9,14 @@ CivicPulse eliminates the manual bottleneck of city maintenance and infrastructu
 
 ## 🚀 The Architecture (Key Features)
 
-### 1. The AI Triage Gate (Cost & Data Integrity)
-To prevent gamification farming and database bloat, every submitted report passes through a strict Gemini 2.5 Flash triage gate.
-* **False-Positive Rejection:** The AI categorically rejects non-issues (e.g., clean roads, blank walls, random selfies).
-* **Automated Cloud Cleanup:** If an image is flagged as a false positive, the Next.js backend intercepts the rejection, extracts the filename, and autonomously executes a Supabase `remove()` command to delete the junk image from the storage bucket, saving cloud costs.
+### 1. Three-Tier AI Triage Pipeline (Cost & Data Integrity)
+To prevent gamification farming and manage cloud costs, every submitted report passes through a multi-stage triage gate:
+* **Tier 1 (Local ONNX Model):** A custom YOLO11n-cls INT8 quantized model (1.6 MB) runs locally on the server to handle first-stage classification (`garbage_dump`, `not_a_hazard`, `pothole`, `waterlogging`). 
+  * *Known Limitations:* Clean puddles may be classified as potholes. Pothole recall on handheld phone photos can be lower.
+* **Tier 2 (Fast Text Description):** If the image is accepted by the local model, a text-based LLM (via Groq/Cerebras/Mistral) generates the report description to avoid expensive vision API calls.
+* **Tier 3 (Gemini Vision Fallback):** Submissions that fall below local confidence thresholds are escalated to Gemini 2.5 Flash for multimodal inspection.
+* **Performance:** Rejected locally with zero API calls: TBD. Accepted locally with only text call: TBD. Escalated to Gemini Vision: TBD. End-to-end latency: TBD.
+* **Automated Cloud Cleanup:** If an image is flagged as a false positive by any tier, the backend intercepts the rejection and autonomously executes a Supabase `remove()` command to delete the junk image from storage.
 
 ### 2. Dual-Factor AI Anti-Spoofing
 Verifying that a civic issue has been resolved requires strict proof to unlock "Civic Points". We utilize a two-pronged verification loop:

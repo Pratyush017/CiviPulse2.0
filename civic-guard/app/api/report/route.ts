@@ -3,6 +3,10 @@ import { Type } from "@google/genai";
 import { z } from "zod";
 import { createClient } from "@/utils/supabase/server";
 import { getGeminiClient, withGeminiRetry, parseGeminiError } from "@/lib/gemini";
+import { routeSubmission } from "@/lib/hazard-router";
+import { describeReport } from "@/lib/describe";
+
+export const runtime = "nodejs";
 
 // ---------------------------------------------------------------------------
 // 1. Zod schema — single source of truth for the Gemini response shape
@@ -116,14 +120,50 @@ export async function POST(request: NextRequest) {
       data: { publicUrl },
     } = supabase.storage.from("issue_images").getPublicUrl(fileName);
 
-    // ---- Call Gemini 2.0 Flash with structured output ----
+    // ---- 1st Stage: Local ONNX Routing ----
     let parsed: ReportAnalysis;
+    const route = await routeSubmission(buffer);
 
-    const genAI = getGeminiClient();
-    if (!genAI) {
-      // No API key — use fallback
-      console.warn("GEMINI_API_KEY not set, using fallback classification");
+    if (route.action === "reject") {
+      const storageFileName = publicUrl.split('/').pop();
+      if (storageFileName) {
+        await supabase.storage.from("issue_images").remove([storageFileName]);
+      }
+      return NextResponse.json(
+        { error: route.reason || "AI Triage Rejected: Invalid civic issue." },
+        { status: 400 }
+      );
+    } else if (route.action === "accept") {
+      const generatedDesc = await describeReport({
+        label: route.label,
+        severity: route.severity,
+        latitude: lat,
+        longitude: lng,
+      });
+
+      const severityMapReverse: Record<number, "Low" | "Medium" | "Critical"> = {
+        1: "Low",
+        2: "Low",
+        3: "Medium",
+        4: "Medium",
+        5: "Critical",
+      };
+
       parsed = {
+        isAuthentic: true,
+        fraudReason: null,
+        category: route.label,
+        title: `${route.label.replace(/_/g, ' ').toUpperCase()} Report`,
+        description: generatedDesc,
+        severity: severityMapReverse[route.severity] || "Medium",
+      };
+    } else {
+      // escalate branch -> fallback to Gemini
+      const genAI = getGeminiClient();
+      if (!genAI) {
+        // No API key — use fallback
+        console.warn("GEMINI_API_KEY not set, using fallback classification");
+        parsed = {
         isAuthentic: true,
         fraudReason: null,
         category: "Uncategorized",
@@ -180,6 +220,7 @@ export async function POST(request: NextRequest) {
           { status: parsedError.status }
         );
       }
+    }
     }
 
     if (!parsed.isAuthentic) {
