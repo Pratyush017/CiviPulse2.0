@@ -3,6 +3,8 @@ import { Type } from "@google/genai";
 import { z } from "zod";
 import { createClient } from "@/utils/supabase/server";
 import { getGeminiClient, withGeminiRetry, parseGeminiError } from "@/lib/gemini";
+import phash from "sharp-phash";
+import dist from "sharp-phash/distance";
 
 // ---------------------------------------------------------------------------
 // 1. Zod schema — Dual-Factor AI verification output
@@ -151,7 +153,7 @@ export async function POST(request: NextRequest) {
       userLng
     );
 
-    if (distanceMeters > 50) {
+    if (distanceMeters > 150) {
       return NextResponse.json(
         {
           error:
@@ -166,6 +168,39 @@ export async function POST(request: NextRequest) {
     const arrayBuffer = await imageFile.arrayBuffer();
     const verifyBuffer = Buffer.from(arrayBuffer);
     const verifyMimeType = imageFile.type || "image/jpeg";
+
+    // ---- pHash Duplicate Image Guard ----
+    // Blocks re-uploads of the original photo (or slightly cropped versions)
+    // before spending tokens on the Gemini API.
+    if (report.image_url) {
+      try {
+        const origResponse = await fetch(report.image_url);
+        if (origResponse.ok) {
+          const origBuffer = Buffer.from(await origResponse.arrayBuffer());
+          const [hashA, hashB] = await Promise.all([
+            phash(origBuffer),
+            phash(verifyBuffer),
+          ]);
+          const hammingDistance = dist(hashA, hashB);
+          console.log(`[pHash] Hamming distance: ${hammingDistance} (threshold: 5)`);
+
+          if (hammingDistance <= 5) {
+            return NextResponse.json(
+              {
+                status: "rejected",
+                reason:
+                  "Duplicate image detected. Please take a new, live photo of the resolved hazard.",
+              },
+              { status: 403 }
+            );
+          }
+        }
+      } catch (phashError) {
+        // Fail open — if pHash guard errors (network glitch, corrupt image),
+        // let the request continue to the AI vision layer.
+        console.error("[pHash Guard Failed]:", phashError);
+      }
+    }
 
     // ---- Fetch the original report image for comparison ----
     let originalImageBase64: string | null = null;

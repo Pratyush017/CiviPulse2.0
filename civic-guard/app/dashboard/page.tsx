@@ -4,8 +4,8 @@ import React, { useCallback, useEffect, useRef, useState, useMemo } from "react"
 import dynamic from "next/dynamic";
 import Image from "next/image";
 import { motion, AnimatePresence, Variants } from "motion/react";
-import { BlurText } from "@/components/ui/BlurText";
-import { BubbleMenu } from "@/components/ui/BubbleMenu";
+import BlurText from "@/components/ui/BlurText";
+import BubbleMenu from "@/components/ui/BubbleMenu";
 import { Session } from "@supabase/supabase-js";
 import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
@@ -23,10 +23,12 @@ import {
   CheckCircle2,
   Loader2,
   MapPin,
+  Plus,
   Shield,
   ShieldCheck,
   Upload,
   Clock,
+  Timer,
   Activity,
   Search,
   XCircle,
@@ -34,6 +36,11 @@ import {
   ImageIcon,
   Navigation,
   List,
+  Map,
+  Sparkles,
+  TrendingUp,
+  TrendingDown,
+  Minus,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -44,17 +51,24 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  DialogTrigger,
 } from "@/components/ui/dialog";
 import { Toast } from "@/components/Toast";
-import { AnimatedItem } from "@/components/ui/AnimatedItem";
+import GradualBlur from "@/components/ui/GradualBlur";
+import { StaggeredMenu } from "@/components/ui/StaggeredMenu";
+import AnimatedItem from "@/components/ui/AnimatedItem";
 import StarBorder from "@/components/ui/StarBorder";
 import TiltedCard from "@/components/ui/TiltedCard";
-import { BorderGlow } from "@/components/ui/BorderGlow";
-import { GooeyNav } from "@/components/ui/GooeyNav";
-import { LaserFlow } from "@/components/ui/LaserFlow";
+import BorderGlow from "@/components/ui/BorderGlow";
+import Folder from "@/components/ui/Folder";
+import GooeyNav from "@/components/ui/GooeyNav";
+import LaserFlow from "@/components/ui/LaserFlow";
 import RotatingText from "@/components/ui/RotatingText";
 import { createClient } from "@/utils/supabase/client";
 import { HeaderActions } from "@/components/ui/LoginButton";
+import localforage from "localforage";
+import { OfflineReportPayload, OFFLINE_REPORT_PREFIX } from "@/lib/offline-types";
+import { useBackgroundSync } from "@/hooks/useBackgroundSync";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -80,7 +94,7 @@ export default function DashboardPage() {
   // --- State ---
   const [reports, setReports] = useState<Report[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [viewMode, setViewMode] = useState<"active" | "resolved">("active");
+  const [viewMode, setViewMode] = useState<"active" | "resolved" | "insights">("active");
   const [focusedCoords, setFocusedCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const isSubmittingRef = useRef(false);
@@ -141,6 +155,12 @@ export default function DashboardPage() {
   // --- Auth State ---
   const [session, setSession] = useState<Session | null>(null);
   const supabase = createClient();
+  
+  const [insights, setInsights] = useState<{
+    summary: string;
+    trend: 'improving' | 'stable' | 'degrading';
+    top_recommendations: string[];
+  } | null>(null);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -170,6 +190,12 @@ export default function DashboardPage() {
   const [showIntroOverlay, setShowIntroOverlay] = useState(true);
   const [mobileView, setMobileView] = useState<'feed' | 'map'>('feed');
   const [headerScale, setHeaderScale] = useState(0.28);
+
+  // --- Offline Sync Engine (must come after all useState declarations) ---
+  const { isSyncing, pendingCount } = useBackgroundSync(
+    setReports as (updater: (prev: unknown[]) => unknown[]) => void,
+    setToast as (toast: { message: string; type: "success" | "error" | "info" }) => void
+  );
 
   useEffect(() => {
     const handleResize = () => setHeaderScale(window.innerWidth < 640 ? 0.5 : 0.28);
@@ -217,11 +243,16 @@ export default function DashboardPage() {
       if (res.ok) {
         const data = await res.json();
         const allReports: Report[] = data.reports ?? [];
-        // Show all reports, including resolved
         setReports(allReports);
       }
+      
+      const insightsRes = await fetch("/api/insights");
+      if (insightsRes.ok) {
+        const insightsData = await insightsRes.json();
+        setInsights(insightsData);
+      }
     } catch (err) {
-      console.error("Failed to fetch reports", err);
+      console.error("Failed to fetch data", err);
     } finally {
       setIsLoading(false);
     }
@@ -308,11 +339,11 @@ export default function DashboardPage() {
       () => {
         setLocationStatus("error");
       },
-      { timeout: 10000 }
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
     );
   };
 
-  // --- Submit report ---
+  // --- Submit report (Offline-First) ---
   const handleSubmit = async () => {
     if (isSubmittingRef.current || isUploading) return;
     if (!selectedFile) return;
@@ -330,7 +361,9 @@ export default function DashboardPage() {
           const pos = await new Promise<GeolocationPosition>(
             (resolve, reject) =>
               navigator.geolocation.getCurrentPosition(resolve, reject, {
-                timeout: 5000,
+                enableHighAccuracy: true,
+                timeout: 10000,
+                maximumAge: 0,
               })
           );
           lat = pos.coords.latitude;
@@ -340,6 +373,46 @@ export default function DashboardPage() {
         }
       }
 
+      // --- Offline-First: Cache to IndexedDB if no network ---
+      if (!navigator.onLine) {
+        const reader = new FileReader();
+        const base64 = await new Promise<string>((resolve, reject) => {
+          reader.onload = () => {
+            const result = reader.result as string;
+            // Strip the data URI prefix (e.g., "data:image/jpeg;base64,")
+            resolve(result.split(",")[1]);
+          };
+          reader.onerror = reject;
+          reader.readAsDataURL(selectedFile);
+        });
+
+        const offlinePayload: OfflineReportPayload = {
+          id: crypto.randomUUID(),
+          imageBase64: base64,
+          imageMimeType: selectedFile.type || "image/jpeg",
+          imageFileName: selectedFile.name || "photo.jpg",
+          latitude: lat,
+          longitude: lng,
+          sync_status: "pending",
+          created_at: new Date().toISOString(),
+        };
+
+        await localforage.setItem(
+          OFFLINE_REPORT_PREFIX + offlinePayload.id,
+          offlinePayload
+        );
+
+        resetForm();
+        setDialogOpen(false);
+        setToast({
+          message: "📡 Saved offline — will sync automatically when back online",
+          type: "info",
+        });
+        setReportCooldown(59);
+        return;
+      }
+
+      // --- Online: Standard submission path ---
       const formData = new FormData();
       formData.append("image", selectedFile);
       formData.append("latitude", String(lat));
@@ -449,8 +522,57 @@ export default function DashboardPage() {
         );
       }
 
+      // ---------------------------------------------
+      // Helper to compress image before upload
+      // ---------------------------------------------
+      const compressImage = async (file: File): Promise<Blob> => {
+        return new Promise((resolve, reject) => {
+          const img = new window.Image();
+          const reader = new FileReader();
+          
+          reader.onload = (e) => {
+            img.src = e.target?.result as string;
+          };
+          
+          img.onload = () => {
+            const canvas = document.createElement("canvas");
+            let width = img.width;
+            let height = img.height;
+            const MAX_SIZE = 1024;
+            
+            if (width > height) {
+              if (width > MAX_SIZE) {
+                height *= MAX_SIZE / width;
+                width = MAX_SIZE;
+              }
+            } else {
+              if (height > MAX_SIZE) {
+                width *= MAX_SIZE / height;
+                height = MAX_SIZE;
+              }
+            }
+            
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext("2d");
+            ctx?.drawImage(img, 0, 0, width, height);
+            
+            canvas.toBlob((blob) => {
+              if (blob) resolve(blob);
+              else reject(new Error("Canvas toBlob failed"));
+            }, "image/jpeg", 0.7);
+          };
+          
+          img.onerror = () => reject(new Error("Image load failed"));
+          reader.readAsDataURL(file);
+        });
+      };
+
+      const compressedBlob = await compressImage(verifyFile);
+      const compressedFile = new File([compressedBlob], verifyFile.name, { type: "image/jpeg" });
+
       const formData = new FormData();
-      formData.append("image", verifyFile);
+      formData.append("image", compressedFile);
       formData.append("report_id", verifyingReport.id);
       formData.append("user_lat", String(position.coords.latitude));
       formData.append("user_lng", String(position.coords.longitude));
@@ -606,14 +728,14 @@ export default function DashboardPage() {
             <BlurText
               text="Civic"
               delay={250}
-              animateBy="chars"
+              animateBy="letters"
               direction="top"
               className="text-white mt-1"
             />
             <BlurText
               text="Pulse"
               delay={250}
-              animateBy="chars"
+              animateBy="letters"
               direction="top"
               className="ml-2 sm:ml-3 bg-cyan-400 text-black px-4 pt-2 pb-1 rounded-xl overflow-hidden flex items-center justify-center leading-none"
             />
@@ -673,7 +795,7 @@ export default function DashboardPage() {
           {/* Stats row */}
           <div className="hidden items-center gap-3 md:flex">
             <div className="cursor-pointer transition-transform hover:scale-105 active:scale-95" onClick={() => setHighlightedFilter(p => p === 'active' ? null : 'active')}>
-              <BorderGlow borderRadius="rounded-[30px]" glowColor="from-teal-400 via-teal-500 to-cyan-500" duration={4}>
+              <BorderGlow borderRadius={30} backgroundColor="#000000" glowColor="173 80 50" colors={['#2dd4bf', '#14b8a6', '#0f766e']} edgeSensitivity={0} glowRadius={50} coneSpread={2}>
                 <div className={`flex items-center gap-2 px-3 py-1.5 rounded-[30px] border text-xs bg-teal-500/10 text-teal-400 transition-colors ${highlightedFilter === 'active' ? 'border-teal-400 bg-teal-500/20' : 'border-teal-500/20'}`}>
                   <div className="w-1.5 h-1.5 rounded-full bg-teal-400 animate-[dot-breathe_2s_ease-in-out_infinite]" />
                   <span className="font-semibold font-display text-[#e8eaf0]">{activeReports.length}</span>
@@ -682,7 +804,7 @@ export default function DashboardPage() {
               </BorderGlow>
             </div>
             <div className="cursor-pointer transition-transform hover:scale-105 active:scale-95" onClick={() => setHighlightedFilter(p => p === 'resolved' ? null : 'resolved')}>
-              <BorderGlow borderRadius="rounded-[30px]" glowColor="from-slate-400 via-slate-500 to-slate-600" duration={4}>
+              <BorderGlow borderRadius={30} backgroundColor="#000000" glowColor="0 0 100" colors={['#ffffff', '#e5e7eb', '#d1d5db']} edgeSensitivity={0} glowRadius={50} coneSpread={2}>
                 <div className={`flex items-center gap-2 px-3 py-1.5 rounded-[30px] border text-xs bg-white/5 text-white transition-colors ${highlightedFilter === 'resolved' ? 'border-white bg-white/10' : 'border-white/10'}`}>
                   <div className="w-1.5 h-1.5 rounded-full bg-green-400" />
                   <span className="font-semibold font-display text-[#e8eaf0]">{resolvedReports.length}</span>
@@ -691,7 +813,7 @@ export default function DashboardPage() {
               </BorderGlow>
             </div>
             <div className="cursor-pointer transition-transform hover:scale-105 active:scale-95" onClick={() => setHighlightedFilter(p => p === 'attention' ? null : 'attention')}>
-              <BorderGlow borderRadius="rounded-[30px]" glowColor="from-amber-400 via-amber-500 to-yellow-600" duration={4}>
+              <BorderGlow borderRadius={30} backgroundColor="#000000" glowColor="43 96 56" colors={['#fbbf24', '#f59e0b', '#d97706']} edgeSensitivity={0} glowRadius={50} coneSpread={2}>
                 <div className={`flex items-center gap-2 px-3 py-1.5 rounded-[30px] border text-xs bg-amber-500/10 text-amber-400 transition-colors ${highlightedFilter === 'attention' ? 'border-amber-400 bg-amber-500/20' : 'border-amber-500/20'}`}>
                   <div className="w-1.5 h-1.5 rounded-full bg-amber-400" />
                   <span className="font-semibold font-display text-[#e8eaf0]">{needsAttentionCount}</span>
@@ -700,7 +822,7 @@ export default function DashboardPage() {
               </BorderGlow>
             </div>
             <div className="cursor-pointer transition-transform hover:scale-105 active:scale-95" onClick={() => setHighlightedFilter(p => p === 'critical' ? null : 'critical')}>
-              <BorderGlow borderRadius="rounded-[30px]" glowColor="from-rose-400 via-rose-500 to-pink-500" duration={4}>
+              <BorderGlow borderRadius={30} backgroundColor="#000000" glowColor="350 89 60" colors={['#f43f5e', '#e11d48', '#be123c']} edgeSensitivity={0} glowRadius={50} coneSpread={2}>
                 <div className={`flex items-center gap-2 px-3 py-1.5 rounded-[30px] border text-xs bg-rose-500/10 text-rose-400 transition-colors ${highlightedFilter === 'critical' ? 'border-rose-400 bg-rose-500/20' : 'border-rose-500/20'}`}>
                   <div className="w-1.5 h-1.5 rounded-full bg-rose-400 animate-[dot-blink_1.8s_ease-in-out_infinite]" />
                   <span className="font-semibold font-display text-[#e8eaf0]">{criticalCount}</span>
@@ -710,12 +832,31 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {/* ======= Report Issue Dialog ======= */}
+          {/* ═══════ Report Issue Dialog ═══════ */}
           <div className="flex items-center gap-2 md:gap-3">
+            {/* Offline Sync Indicator */}
+            {(isSyncing || pendingCount > 0) && (
+              <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-400 text-xs font-medium animate-pulse">
+                <Loader2 className="size-3 animate-spin" />
+                <span className="hidden sm:inline">{isSyncing ? "Syncing..." : `${pendingCount} pending`}</span>
+              </div>
+            )}
             <HeaderActions 
               onReportClick={() => {
                 if (session && reportCooldown === 0) {
-                  setDialogOpen(true);
+                  setLocationStatus("fetching");
+                  navigator.geolocation.getCurrentPosition(
+                    (pos) => {
+                      setCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+                      setLocationStatus("success");
+                      setDialogOpen(true);
+                    },
+                    (err) => {
+                      setLocationStatus("error");
+                      alert("You must allow location access to report an issue. Please enable it and try again.");
+                    },
+                    { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+                  );
                 } else if (!session) {
                   alert("Please sign in to report an issue and earn Civic Points!");
                 } else {
@@ -771,7 +912,7 @@ export default function DashboardPage() {
                       }`}
                     >
                       <div className="mb-6 flex justify-center">
-                        <Upload className="size-8 text-cyan-400" strokeWidth={1.5} />
+                        <Folder size={0.7} color="#22d3ee" />
                       </div>
                       <p className="text-sm">
                         Drag & drop an image, or{" "}
@@ -789,18 +930,10 @@ export default function DashboardPage() {
                       <button
                         type="button"
                         onClick={() => cameraInputRef.current?.click()}
-                        className="min-h-[60px] flex-1 flex flex-col items-center justify-center bg-slate-900/50 border border-slate-800 rounded-xl active:bg-slate-800 text-slate-300 gap-2 transition-colors"
+                        className="min-h-[60px] w-full flex flex-col items-center justify-center bg-slate-900/50 border border-slate-800 rounded-xl active:bg-slate-800 text-slate-300 gap-2 transition-colors"
                       >
                         <Camera className="size-5" />
                         <span className="text-sm font-semibold">Take Photo</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => galleryInputRef.current?.click()}
-                        className="min-h-[60px] flex-1 flex flex-col items-center justify-center bg-slate-900/50 border border-slate-800 rounded-xl active:bg-slate-800 text-slate-300 gap-2 transition-colors"
-                      >
-                        <ImageIcon className="size-5" />
-                        <span className="text-sm font-semibold">Gallery</span>
                       </button>
                     </div>
 
@@ -819,7 +952,6 @@ export default function DashboardPage() {
                       ref={galleryInputRef}
                       type="file"
                       accept="image/*"
-                      capture="environment"
                       className="hidden"
                       onChange={(e) =>
                         handleFileChange(e.target.files?.[0] ?? null)
@@ -895,35 +1027,97 @@ export default function DashboardPage() {
         </div>
         </header>
 
-        {/* ======================= BODY ======================= */}
+        {/* ═══════════════════════ BODY ═══════════════════════ */}
         <motion.div 
           variants={containerVariants}
           initial="hidden"
           animate={showIntro ? "hidden" : "show"}
           className="flex flex-col md:flex-row flex-1 w-full overflow-hidden"
         >
-            {/* ---------- LEFT COLUMN: Report Feed (35%) ---------- */}
-            <motion.aside variants={itemVariants} className={`w-full md:w-[400px] lg:w-[450px] ${mobileView === 'feed' ? 'flex' : 'hidden md:flex'} h-full overflow-y-auto z-10 bg-black flex-col border-r border-[#252d45] shadow-2xl relative`}>
-            <div className="flex items-center border-b border-[#252d45] gap-4 px-6 pt-3 pb-3">
+            {/* ────────── LEFT COLUMN: Report Feed (35%) ────────── */}
+            <motion.aside variants={itemVariants} className={`w-full md:w-[400px] lg:w-[450px] ${mobileView === 'feed' ? 'flex' : 'hidden md:flex'} h-full overflow-x-hidden z-10 bg-black flex-col border-r border-[#252d45] shadow-2xl relative`}>
+            <div className="flex items-center border-b border-[#252d45] gap-2 sm:gap-4 px-2 sm:px-6 pt-3 pb-3 overflow-x-auto no-scrollbar">
               <GooeyNav
-                tabs={[
+                initialActiveIndex={viewMode === 'active' ? 0 : viewMode === 'resolved' ? 1 : 2}
+                onChange={(index) => setViewMode(index === 0 ? "active" : index === 1 ? "resolved" : "insights")}
+                particleCount={6}
+                timeVariance={100}
+                colors={[173, 173, 173, 173]} // Teal-ish colors mapping if defined in CSS, else fallback
+                items={[
                   {
-                    id: "active",
-                    label: `ACTIVE ${activeReports.length}`
+                    label: (
+                      <>
+                        ACTIVE <span className="ml-1 bg-black/20 rounded-full px-2 py-0.5">{activeReports.length}</span>
+                      </>
+                    )
                   },
                   {
-                    id: "resolved",
-                    label: `RESOLVED ${resolvedReports.length}`
+                    label: (
+                      <>
+                        RESOLVED <span className="ml-1 bg-black/20 rounded-full px-2 py-0.5">{resolvedReports.length}</span>
+                      </>
+                    )
+                  },
+                  {
+                    label: (
+                      <>
+                        <Sparkles className="size-3 inline-block mr-1" /> INSIGHTS
+                      </>
+                    )
                   }
                 ]}
-                activeId={viewMode}
-                onChange={(id) => setViewMode(id as "active" | "resolved")}
               />
             </div>
 
-            {/* Scrollable feed */}
-            <div className="flex-1 overflow-y-auto px-4 pt-3 pb-24 space-y-3 scrollbar-thin">
-              {isLoading ? (
+            {/* Content Area */}
+            <div className="flex-1 overflow-y-auto overflow-x-hidden no-scrollbar px-4 pt-3 pb-24 space-y-3">
+              {viewMode === "insights" ? (
+                /* AI Automated Insights Widget */
+                insights ? (
+                  <div className="relative rounded-[20px] overflow-hidden p-[1px] group mt-2">
+                    <div className="absolute inset-0 bg-gradient-to-r from-violet-500 via-fuchsia-500 to-cyan-500 opacity-20 group-hover:opacity-40 transition-opacity duration-500" />
+                    <div className="relative bg-[#050505] rounded-[20px] p-5 flex flex-col gap-4">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-0">
+                        <div className="flex items-center gap-2 text-fuchsia-400">
+                          <Sparkles className="size-5" />
+                          <span className="text-sm font-bold uppercase tracking-wider">AI City Insights</span>
+                        </div>
+                        <div className={`flex items-center w-fit gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${
+                          insights.trend === 'improving' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' :
+                          insights.trend === 'degrading' ? 'bg-rose-500/10 text-rose-400 border border-rose-500/20' :
+                          'bg-blue-500/10 text-blue-400 border border-blue-500/20'
+                        }`}>
+                          {insights.trend === 'improving' ? <TrendingUp className="size-4" /> :
+                           insights.trend === 'degrading' ? <TrendingDown className="size-4" /> :
+                           <Minus className="size-4" />}
+                          {insights.trend}
+                        </div>
+                      </div>
+                      <p className="text-base text-slate-300 leading-relaxed font-medium">
+                        {insights.summary}
+                      </p>
+                      {insights.top_recommendations?.length > 0 && (
+                        <div className="mt-2 space-y-3">
+                          <div className="text-xs font-bold text-slate-500 uppercase tracking-widest">Recommended Actions</div>
+                          <ul className="space-y-2">
+                            {insights.top_recommendations.map((rec, i) => (
+                              <li key={i} className="flex items-start gap-3 text-sm text-slate-400 bg-slate-900/50 p-3 rounded-xl border border-white/5">
+                                <span className="text-fuchsia-500/70 mt-0.5 font-bold">{i + 1}.</span>
+                                <span className="leading-tight">{rec}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center justify-center py-20 gap-3">
+                    <Loader2 className="size-8 animate-spin text-fuchsia-500" />
+                    <p className="text-sm text-slate-500">Analyzing city data...</p>
+                  </div>
+                )
+              ) : isLoading ? (
                 <div className="flex flex-col items-center justify-center py-20 gap-3">
                   <Loader2 className="size-8 animate-spin text-cyan-500" />
                   <p className="text-sm text-slate-500">Loading reports…</p>
@@ -975,39 +1169,43 @@ export default function DashboardPage() {
                   const relativeTime = dayjs(report.created_at).fromNow();
 
                   const starColor = report.severity_score === 1 ? '#2dd4bf' : report.severity_score === 2 ? '#f43f5e' : '#fbbf24';
-                   const borderGlowColor = report.severity_score === 1
-                     ? "from-teal-400 via-teal-500 to-cyan-400"
-                     : report.severity_score === 2
-                     ? "from-amber-400 via-amber-500 to-yellow-600"
-                     : "from-rose-400 via-rose-500 to-pink-500";
+                  const glowColor = report.severity_score === 1 ? '173 80 50' : report.severity_score === 2 ? '350 89 60' : '43 96 56';
 
-                   const isHighlighted = highlightedFilter === 'active' ? report.status !== 'Resolved'
-                                       : highlightedFilter === 'resolved' ? report.status === 'Resolved'
-                                       : highlightedFilter === 'attention' ? (report.status !== 'Resolved' && report.severity_score >= 3)
-                                       : highlightedFilter === 'critical' ? (report.status !== 'Resolved' && report.severity_score >= 4)
-                                       : false;
+                  const isHighlighted = highlightedFilter === 'active' ? report.status !== 'Resolved'
+                                      : highlightedFilter === 'resolved' ? report.status === 'Resolved'
+                                      : highlightedFilter === 'attention' ? (report.status !== 'Resolved' && report.severity_score >= 3)
+                                      : highlightedFilter === 'critical' ? (report.status !== 'Resolved' && report.severity_score >= 4)
+                                      : false;
 
-                   return (
-                     <AnimatedItem key={report.id} delay={index * 0.05}>
-                       <TiltedCard
-                         className="w-full"
-                       imageSrc=""
-                       containerHeight="auto"
-                       containerWidth="100%"
-                       imageHeight="auto"
-                       imageWidth="100%"
-                       rotateAmplitude={5}
-                       scaleOnHover={1.02}
-                       showMobileWarning={false}
-                       showTooltip={false}
-                       displayOverlayContent={true}
-                       overlayContent={
-                         <BorderGlow
-                           borderRadius="rounded-[20px]"
-                           glowColor={borderGlowColor}
-                           className="w-full h-full"
-                           duration={isHighlighted ? 3 : 8}
-                         >
+                  return (
+                    <AnimatedItem key={report.id} index={index} delay={index * 0.05}>
+                      <TiltedCard
+                        className="w-full"
+                      imageSrc=""
+                      containerHeight="auto"
+                      containerWidth="100%"
+                      imageHeight="auto"
+                      imageWidth="100%"
+                      rotateAmplitude={5}
+                      scaleOnHover={1.02}
+                      showMobileWarning={false}
+                      showTooltip={false}
+                      displayOverlayContent={true}
+                      overlayContent={
+                        <BorderGlow
+                          borderRadius={20}
+                          backgroundColor="#0a0a0a"
+                          glowColor={glowColor}
+                          edgeSensitivity={isHighlighted ? 100 : 0}
+                          glowRadius={70}
+                          glowIntensity={isHighlighted ? 6.0 : 1.5}
+                          coneSpread={isHighlighted ? 25 : 3}
+                          colors={[starColor, starColor, starColor]}
+                          className="w-full h-full"
+                          animated={isHighlighted}
+                          loopAnimation={isHighlighted}
+                          animationSpeedMultiplier={isHighlighted ? 3 : 1}
+                        >
                           <StarBorder
                             as="div"
                             color={starColor}
@@ -1106,14 +1304,15 @@ export default function DashboardPage() {
 
 
             
-            {/* Smooth gradient fade for the scrollable feed */}
-            <div className="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-black to-transparent pointer-events-none z-20" />
+            {/* Smooth blur fade for the scrollable feed */}
+            <GradualBlur preset="bottom" height="4rem" zIndex={20} className="pointer-events-none" />
             </motion.aside>
 
-          {/* ---------- RIGHT COLUMN: Map & Interactions (65%) ---------- */}
+          {/* ────────── RIGHT COLUMN: Map & Interactions (65%) ────────── */}
           <motion.section variants={itemVariants} className={`flex-1 relative ${mobileView === 'map' ? 'flex flex-col' : 'hidden md:flex'} h-full`}>
             {/* Leaflet map taking full background of right column */}
-            <LeafletMap reports={filteredReports} viewMode={viewMode} focusCoords={focusedCoords} emphasizedSeverity={emphasizedSeverity} />
+            <LeafletMap reports={filteredReports} viewMode={viewMode === "resolved" ? "resolved" : "active"} focusCoords={focusedCoords} emphasizedSeverity={emphasizedSeverity} />
+
 
             {/* Map overlay legend */}
             <div className="hidden md:flex absolute bottom-[88px] left-1/2 -translate-x-1/2 md:bottom-6 md:left-6 md:translate-x-0 w-max z-10 items-center gap-4 rounded-xl border border-slate-800 bg-slate-950/90 px-5 py-3 backdrop-blur-lg shadow-2xl transform-gpu">
@@ -1124,9 +1323,15 @@ export default function DashboardPage() {
                   </span>
                   <BorderGlow
                     className="hover:scale-[1.3] transition-all duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)] transform origin-bottom group cursor-pointer"
-                    borderRadius="rounded-lg"
-                    glowColor="from-teal-400 via-teal-500 to-cyan-500"
-                    duration={6}
+                    borderRadius={8}
+                    backgroundColor="#020617"
+                    glowColor="173 80 50"
+                    edgeSensitivity={0}
+                    glowRadius={70}
+                    glowIntensity={1.0}
+                    coneSpread={3}
+                    disableCursorTracking
+                    animateOnHover
                   >
                     <div 
                       className="flex items-center gap-1.5 hover:bg-slate-800/80 px-2.5 py-1.5 rounded-lg transition-all duration-300 relative h-full w-full"
@@ -1141,9 +1346,15 @@ export default function DashboardPage() {
                   </BorderGlow>
                   <BorderGlow
                     className="hover:scale-[1.3] transition-all duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)] transform origin-bottom group cursor-pointer"
-                    borderRadius="rounded-lg"
-                    glowColor="from-amber-400 via-amber-500 to-yellow-500"
-                    duration={6}
+                    borderRadius={8}
+                    backgroundColor="#020617"
+                    glowColor="43 96 56"
+                    edgeSensitivity={0}
+                    glowRadius={70}
+                    glowIntensity={1.0}
+                    coneSpread={3}
+                    disableCursorTracking
+                    animateOnHover
                   >
                     <div 
                       className="flex items-center gap-1.5 hover:bg-slate-800/80 px-2.5 py-1.5 rounded-lg transition-all duration-300 relative h-full w-full"
@@ -1158,9 +1369,15 @@ export default function DashboardPage() {
                   </BorderGlow>
                   <BorderGlow
                     className="hover:scale-[1.3] transition-all duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)] transform origin-bottom group cursor-pointer"
-                    borderRadius="rounded-lg"
-                    glowColor="from-rose-400 via-rose-500 to-pink-500"
-                    duration={6}
+                    borderRadius={8}
+                    backgroundColor="#020617"
+                    glowColor="350 89 60"
+                    edgeSensitivity={0}
+                    glowRadius={70}
+                    glowIntensity={1.0}
+                    coneSpread={3}
+                    disableCursorTracking
+                    animateOnHover
                   >
                     <div 
                       className="flex items-center gap-1.5 hover:bg-slate-800/80 px-2.5 py-1.5 rounded-lg transition-all duration-300 relative h-full w-full"
@@ -1191,7 +1408,7 @@ export default function DashboardPage() {
 
         {/* ═══════════════════ HOW IT WORKS DIALOG ═══════════════════ */}
         <Dialog open={showHowItWorks} onOpenChange={setShowHowItWorks}>
-          <DialogContent className="sm:max-w-md max-h-[85vh] overflow-y-auto bg-[#0a0a0a] border border-white/10 text-slate-100 ring-0">
+          <DialogContent className="sm:max-w-md max-h-[85vh] overflow-y-auto no-scrollbar bg-[#0a0a0a] border border-white/10 text-slate-100 ring-0">
             <DialogHeader>
               <DialogTitle className="text-slate-50 text-lg">
                 <span className="flex items-center gap-2">
@@ -1223,6 +1440,16 @@ export default function DashboardPage() {
                     <span>Uploading fake images, stock photos, or unrelated content.</span>
                   </li>
                 </ul>
+              </div>
+
+              <div className="space-y-3">
+                <h4 className="text-fuchsia-400 font-semibold text-sm uppercase tracking-wider flex items-center gap-2">
+                  <span className="size-2 rounded-full bg-fuchsia-400" />
+                  AI Insights & Analytics
+                </h4>
+                <div className="text-sm text-slate-300 leading-relaxed">
+                  Use the <span className="font-bold text-white"><Sparkles className="size-3 inline-block" /> INSIGHTS</span> tab to view automated city-wide analytics. Our AI analyzes the current active reports to provide a summary of infrastructure health and actionable recommendations for improvements.
+                </div>
               </div>
 
               <div className="space-y-3">
@@ -1453,14 +1680,61 @@ export default function DashboardPage() {
           {/* Bubble Menu Toggle (Bottom Left) */}
           <div className="pointer-events-auto shrink-0 relative z-[101]">
             <BubbleMenu 
+              logo={null}
+              className="relative top-0 left-0 right-0 p-0 m-0 border-none justify-start"
+              menuBg="#050505"
+              menuContentColor="#fff"
+              useFixedPosition={false}
               items={[
-                { id: 'active', label: `Active (${activeReports.length})` },
-                { id: 'resolved', label: `Resolved (${resolvedReports.length})` },
-                { id: 'attention', label: `Attention (${needsAttentionCount})` },
-                { id: 'critical', label: `Critical (${criticalCount})` }
+                {
+                  label: (
+                    <div className="flex flex-col items-center justify-center pointer-events-none">
+                      <span className="text-3xl font-display font-bold text-teal-400">{activeReports.length}</span>
+                      <span className="text-xs font-medium text-slate-400 uppercase tracking-wider">Active</span>
+                    </div>
+                  ),
+                  href: '#',
+                  rotation: -8,
+                  hoverStyles: { bgColor: '#0f766e', textColor: '#ffffff' },
+                  onClick: () => setHighlightedFilter(p => p === 'active' ? null : 'active')
+                },
+                {
+                  label: (
+                    <div className="flex flex-col items-center justify-center pointer-events-none">
+                      <span className="text-3xl font-display font-bold text-green-400">{resolvedReports.length}</span>
+                      <span className="text-xs font-medium text-slate-400 uppercase tracking-wider">Resolved</span>
+                    </div>
+                  ),
+                  href: '#',
+                  rotation: 8,
+                  hoverStyles: { bgColor: '#166534', textColor: '#ffffff' },
+                  onClick: () => setHighlightedFilter(p => p === 'resolved' ? null : 'resolved')
+                },
+                {
+                  label: (
+                    <div className="flex flex-col items-center justify-center pointer-events-none">
+                      <span className="text-3xl font-display font-bold text-amber-400">{needsAttentionCount}</span>
+                      <span className="text-xs font-medium text-slate-400 uppercase tracking-wider">Attention</span>
+                    </div>
+                  ),
+                  href: '#',
+                  rotation: -8,
+                  hoverStyles: { bgColor: '#b45309', textColor: '#ffffff' },
+                  onClick: () => setHighlightedFilter(p => p === 'attention' ? null : 'attention')
+                },
+                {
+                  label: (
+                    <div className="flex flex-col items-center justify-center pointer-events-none">
+                      <span className="text-3xl font-display font-bold text-rose-400">{criticalCount}</span>
+                      <span className="text-xs font-medium text-slate-400 uppercase tracking-wider">Critical</span>
+                    </div>
+                  ),
+                  href: '#',
+                  rotation: 8,
+                  hoverStyles: { bgColor: '#be123c', textColor: '#ffffff' },
+                  onClick: () => setHighlightedFilter(p => p === 'critical' ? null : 'critical')
+                }
               ]}
-              activeId={highlightedFilter || undefined}
-              onChange={(id) => setHighlightedFilter(p => p === id ? null : id as 'active' | 'resolved' | 'attention' | 'critical')}
             />
           </div>
 
