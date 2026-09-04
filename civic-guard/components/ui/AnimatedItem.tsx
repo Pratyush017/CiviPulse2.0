@@ -1,79 +1,32 @@
-"use client";
+import React, { useRef, ReactNode, MouseEventHandler } from 'react';
+import { motion, useInView } from 'motion/react';
 
-import React from "react";
-import { motion, HTMLMotionProps } from "motion/react";
-
-type AnimationVariant = "fade" | "slideUp" | "slideDown" | "scale" | "rotate";
-
-interface AnimatedItemProps extends HTMLMotionProps<"div"> {
-  children: React.ReactNode;
-  variant?: AnimationVariant;
+interface AnimatedItemProps {
+  children: ReactNode;
   delay?: number;
-  duration?: number;
-  whileHoverScale?: number;
-  whileTapScale?: number;
-  triggerOnce?: boolean;
+  index: number;
+  onMouseEnter?: MouseEventHandler<HTMLDivElement>;
+  onClick?: MouseEventHandler<HTMLDivElement>;
 }
 
-export function AnimatedItem({
-  children,
-  variant = "fade",
-  delay = 0,
-  duration = 0.4,
-  whileHoverScale,
-  whileTapScale,
-  triggerOnce = true,
-  className = "",
-  ...props
-}: AnimatedItemProps) {
-  const getVariants = () => {
-    switch (variant) {
-      case "slideUp":
-        return {
-          hidden: { opacity: 0, y: 20 },
-          visible: { opacity: 1, y: 0 },
-        };
-      case "slideDown":
-        return {
-          hidden: { opacity: 0, y: -20 },
-          visible: { opacity: 1, y: 0 },
-        };
-      case "scale":
-        return {
-          hidden: { opacity: 0, scale: 0.95 },
-          visible: { opacity: 1, scale: 1 },
-        };
-      case "rotate":
-        return {
-          hidden: { opacity: 0, rotate: -5 },
-          visible: { opacity: 1, rotate: 0 },
-        };
-      case "fade":
-      default:
-        return {
-          hidden: { opacity: 0 },
-          visible: { opacity: 1 },
-        };
-    }
-  };
-
+const AnimatedItem: React.FC<AnimatedItemProps> = ({ children, delay = 0, index, onMouseEnter, onClick }) => {
+  const ref = useRef<HTMLDivElement>(null);
+  const inView = useInView(ref, { amount: 0.2, once: false });
+  
   return (
     <motion.div
-      initial="hidden"
-      whileInView="visible"
-      viewport={{ once: triggerOnce, margin: "-20px" }}
-      variants={getVariants()}
-      transition={{
-        duration,
-        delay,
-        ease: [0.16, 1, 0.3, 1], // Custom elegant ease-out cubic
-      }}
-      whileHover={whileHoverScale ? { scale: whileHoverScale } : undefined}
-      whileTap={whileTapScale ? { scale: whileTapScale } : undefined}
-      className={className}
-      {...props}
+      ref={ref}
+      data-index={index}
+      onMouseEnter={onMouseEnter}
+      onClick={onClick}
+      initial={{ scale: 0.9, opacity: 0 }}
+      animate={inView ? { scale: 1, opacity: 1 } : { scale: 0.9, opacity: 0 }}
+      transition={{ duration: 0.3, delay }}
+      className="mb-3 last:mb-0 w-full"
     >
       {children}
     </motion.div>
   );
-}
+};
+
+export default AnimatedItem;

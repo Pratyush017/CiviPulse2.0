@@ -18,7 +18,7 @@ export const metadata: Metadata = {
     "Report and track civic issues in your community. AI-powered classification and severity analysis.",
 };
 
-import { ClickSpark } from "@/components/ui/ClickSpark";
+import ClickSpark from "@/components/ui/ClickSpark";
 
 export default function RootLayout({
   children,
@@ -32,7 +32,7 @@ export default function RootLayout({
     >
       <body className="min-h-full flex flex-col">
         {children}
-        <ClickSpark sparkColors={["#2dd4bf"]} sparkCount={10} />
+        <ClickSpark sparkColor="#2dd4bf" sparkCount={10} />
       </body>
     </html>
   );

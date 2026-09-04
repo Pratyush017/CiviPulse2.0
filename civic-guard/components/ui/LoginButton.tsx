@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback, useMemo } from "react";
+import { Button } from "@/components/ui/button";
 import { createClient } from "@/utils/supabase/client";
 import { Session } from "@supabase/supabase-js";
 
@@ -9,15 +10,18 @@ interface Profile {
   avatar_url: string;
 }
 
+import StarBorder from "@/components/ui/StarBorder";
+import { LogOut } from "lucide-react";
 import { StaggeredMenu } from "@/components/ui/StaggeredMenu";
 export function HeaderActions({ 
   onReportClick, 
   onHowItWorksClick,
+  onSeverityScaleClick,
   onSeveritySelect
 }: { 
   onReportClick: () => void,
   onHowItWorksClick: () => void,
-  onSeverityScaleClick?: () => void,
+  onSeverityScaleClick: () => void,
   onSeveritySelect?: (severity: number) => void
 }) {
   const [session, setSession] = useState<Session | null>(null);

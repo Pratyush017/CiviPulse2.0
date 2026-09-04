@@ -1,90 +1,202 @@
 "use client";
 
-import React, { useRef } from "react";
-import { motion, useMotionValue, useSpring, useTransform, MotionValue } from "motion/react";
+import {
+  motion,
+  MotionValue,
+  useMotionValue,
+  useSpring,
+  useTransform,
+  type SpringOptions,
+  AnimatePresence
+} from 'motion/react';
+import React, { Children, cloneElement, useEffect, useMemo, useRef, useState } from 'react';
 
-interface DockProps {
-  children?: React.ReactNode;
+export type DockItemData = {
+  icon: React.ReactNode;
+  label: React.ReactNode;
+  onClick: () => void;
   className?: string;
-}
+};
 
-export function Dock({ children, className = "" }: DockProps) {
-  const mouseX = useMotionValue(Infinity);
+export type DockProps = {
+  items: DockItemData[];
+  className?: string;
+  distance?: number;
+  panelHeight?: number;
+  baseItemSize?: number;
+  dockHeight?: number;
+  magnification?: number;
+  spring?: SpringOptions;
+};
+
+type DockItemProps = {
+  className?: string;
+  children: React.ReactNode;
+  onClick?: () => void;
+  mouseX: MotionValue<number>;
+  spring: SpringOptions;
+  distance: number;
+  baseItemSize: number;
+  magnification: number;
+  label?: React.ReactNode;
+};
+
+function DockItem({
+  children,
+  className = '',
+  onClick,
+  mouseX,
+  spring,
+  distance,
+  magnification,
+  baseItemSize,
+  label
+}: DockItemProps) {
+  const ref = useRef<HTMLDivElement>(null);
+  const isHovered = useMotionValue(0);
+
+  const mouseDistance = useTransform(mouseX, val => {
+    const rect = ref.current?.getBoundingClientRect() ?? {
+      x: 0,
+      width: baseItemSize
+    };
+    return val - rect.x - baseItemSize / 2;
+  });
+
+  const targetSize = useTransform(mouseDistance, [-distance, 0, distance], [baseItemSize, magnification, baseItemSize]);
+  const size = useSpring(targetSize, spring);
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      onClick?.();
+    }
+  };
 
   return (
     <motion.div
-      onMouseMove={(e) => mouseX.set(e.clientX)}
-      onMouseLeave={() => mouseX.set(Infinity)}
-      className={`flex h-16 items-end gap-4 rounded-2xl bg-slate-900/40 border border-slate-800/80 px-4 pb-3 backdrop-blur-md shadow-2xl ${className}`}
+      ref={ref}
+      style={{
+        width: size,
+        height: size
+      }}
+      onHoverStart={() => isHovered.set(1)}
+      onHoverEnd={() => isHovered.set(0)}
+      onFocus={() => isHovered.set(1)}
+      onBlur={() => isHovered.set(0)}
+      onClick={onClick}
+      onKeyDown={handleKeyDown}
+      className={`relative inline-flex items-center justify-center cursor-pointer ${className || 'rounded-full bg-[#120F17] border-neutral-700 border-2 shadow-md'}`}
+      tabIndex={0}
+      role="button"
+      aria-haspopup="true"
+      aria-label={typeof label === 'string' ? label : undefined}
     >
-      {React.Children.map(children, (child) => {
-        if (React.isValidElement(child)) {
-          return React.cloneElement(child as React.ReactElement<{ mouseX: MotionValue<number> }>, { mouseX });
-        }
-        return child;
-      })}
+      {Children.map(children, child =>
+        React.isValidElement(child)
+          ? cloneElement(child as React.ReactElement<{ isHovered?: MotionValue<number> }>, { isHovered })
+          : child
+      )}
     </motion.div>
   );
 }
 
-interface DockIconProps {
-  children: React.ReactNode;
-  mouseX?: MotionValue<number>;
-  onClick?: () => void;
-  tooltip?: string;
+type DockLabelProps = {
   className?: string;
-}
+  children: React.ReactNode;
+  isHovered?: MotionValue<number>;
+};
 
-export function DockIcon({
-  children,
-  mouseX,
-  onClick,
-  tooltip,
-  className = "",
-}: DockIconProps) {
-  const ref = useRef<HTMLDivElement>(null);
+function DockLabel({ children, className = '', isHovered }: DockLabelProps) {
+  const [isVisible, setIsVisible] = useState(false);
 
-  // Default motion value if parent Dock did not inject it (or if used alone)
-  const fallbackMouseX = useMotionValue(Infinity);
-  const activeMouseX = mouseX || fallbackMouseX;
-
-  const distance = useTransform(activeMouseX, (val) => {
-    const bounds = ref.current?.getBoundingClientRect() ?? { x: 0, width: 0 };
-    return val - bounds.x - bounds.width / 2;
-  });
-
-  const widthTransform = useTransform(distance, [-150, 0, 150], [40, 64, 40]);
-  const heightTransform = useTransform(distance, [-150, 0, 150], [40, 64, 40]);
-
-  const width = useSpring(widthTransform, {
-    mass: 0.1,
-    stiffness: 150,
-    damping: 12,
-  });
-
-  const height = useSpring(heightTransform, {
-    mass: 0.1,
-    stiffness: 150,
-    damping: 12,
-  });
+  useEffect(() => {
+    if (!isHovered) return;
+    const unsubscribe = isHovered.on('change', latest => {
+      setIsVisible(latest === 1);
+    });
+    return () => unsubscribe();
+  }, [isHovered]);
 
   return (
-    <div className="relative group">
-      <motion.div
-        ref={ref}
-        style={{ width, height }}
-        onClick={onClick}
-        className={`flex aspect-square items-center justify-center rounded-xl bg-slate-800/80 hover:bg-slate-700/90 text-white transition-colors duration-200 cursor-pointer shadow-md ${className}`}
-      >
-        {children}
-      </motion.div>
-
-      {/* Tooltip */}
-      {tooltip && (
-        <span className="absolute -top-10 left-1/2 -translate-x-1/2 scale-0 group-hover:scale-100 transition-all duration-200 bg-slate-950 text-slate-100 text-xs px-2 py-1 rounded border border-slate-800 pointer-events-none whitespace-nowrap shadow-md">
-          {tooltip}
-        </span>
+    <AnimatePresence>
+      {isVisible && (
+        <motion.div
+          initial={{ opacity: 0, y: 0 }}
+          animate={{ opacity: 1, y: -10 }}
+          exit={{ opacity: 0, y: 0 }}
+          transition={{ duration: 0.2 }}
+          className={`${className} absolute -top-8 left-1/2 w-fit whitespace-pre rounded-md border border-white/10 bg-[#0a0a0a] px-3 py-1.5 text-xs font-semibold uppercase tracking-wider text-white shadow-xl`}
+          role="tooltip"
+          style={{ x: '-50%' }}
+        >
+          {children}
+        </motion.div>
       )}
-    </div>
+    </AnimatePresence>
+  );
+}
+
+type DockIconProps = {
+  className?: string;
+  children: React.ReactNode;
+  isHovered?: MotionValue<number>;
+};
+
+function DockIcon({ children, className = '' }: DockIconProps) {
+  return <div className={`flex items-center justify-center ${className}`}>{children}</div>;
+}
+
+export default function Dock({
+  items,
+  className = '',
+  spring = { mass: 0.1, stiffness: 150, damping: 12 },
+  magnification = 70,
+  distance = 200,
+  panelHeight = 64,
+  dockHeight = 256,
+  baseItemSize = 50
+}: DockProps) {
+  const mouseX = useMotionValue(Infinity);
+  const isHovered = useMotionValue(0);
+
+  const maxHeight = useMemo(() => Math.max(dockHeight, magnification + magnification / 2 + 4), [magnification]);
+  const heightRow = useTransform(isHovered, [0, 1], [panelHeight, maxHeight]);
+  const height = useSpring(heightRow, spring);
+
+  return (
+    <motion.div style={{ height, scrollbarWidth: 'none' }} className={`flex items-center ${className}`}>
+      <motion.div
+        onMouseMove={({ pageX }) => {
+          isHovered.set(1);
+          mouseX.set(pageX);
+        }}
+        onMouseLeave={() => {
+          isHovered.set(0);
+          mouseX.set(Infinity);
+        }}
+        className={`flex items-center justify-center w-fit gap-3 ${className || 'rounded-2xl border-neutral-700/50 bg-[#0a0a0a]/80 backdrop-blur-md border px-4 pb-2 pt-2 items-end'}`}
+        style={{ height: panelHeight }}
+        role="toolbar"
+        aria-label="Application dock"
+      >
+        {items.map((item, index) => (
+          <DockItem
+            key={index}
+            onClick={item.onClick}
+            className={item.className}
+            mouseX={mouseX}
+            spring={spring}
+            distance={distance}
+            magnification={magnification}
+            baseItemSize={baseItemSize}
+            label={item.label}
+          >
+            <DockIcon>{item.icon}</DockIcon>
+            <DockLabel>{item.label}</DockLabel>
+          </DockItem>
+        ))}
+      </motion.div>
+    </motion.div>
   );
 }

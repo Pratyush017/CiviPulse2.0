@@ -1,89 +1,92 @@
 "use client";
 
-import React, { useEffect, useState, useRef } from "react";
-import { motion, useInView, Variants } from "motion/react";
+import React from "react";
+import { motion, Variants } from "motion/react";
 
 interface BlurTextProps {
   text: string;
   delay?: number;
-  speed?: number;
-  direction?: "top" | "bottom" | "none";
-  blurAmount?: string; // e.g. "10px"
-  animateBy?: "words" | "chars";
+  animateBy?: "words" | "letters";
+  direction?: "top" | "bottom" | "left" | "right";
   className?: string;
-  onComplete?: () => void;
+  onAnimationComplete?: () => void;
 }
 
-export function BlurText({
+export default function BlurText({
   text,
-  delay = 0,
-  speed = 0.05,
-  direction = "bottom",
-  blurAmount = "8px",
-  animateBy = "chars",
+  delay = 200,
+  animateBy = "words",
+  direction = "top",
   className = "",
-  onComplete,
+  onAnimationComplete,
 }: BlurTextProps) {
-  const elements = animateBy === "words" ? text.split(" ") : text.split("");
-  const containerRef = useRef<HTMLDivElement>(null);
-  const isInView = useInView(containerRef, { once: true, margin: "-10px" });
-  const [shouldAnimate, setShouldAnimate] = useState(false);
+  const elements =
+    animateBy === "words" ? text.split(" ") : text.split("");
 
-  useEffect(() => {
-    if (isInView) {
-      const timer = setTimeout(() => {
-        setShouldAnimate(true);
-      }, delay * 1000);
-      return () => clearTimeout(timer);
+  const getTransform = (dir: string) => {
+    switch (dir) {
+      case "top":
+        return -50;
+      case "bottom":
+        return 50;
+      default:
+        return 0;
     }
-  }, [isInView, delay]);
+  };
 
-  const yOffset = direction === "top" ? -15 : direction === "bottom" ? 15 : 0;
+  const getTransformX = (dir: string) => {
+    switch (dir) {
+      case "left":
+        return -50;
+      case "right":
+        return 50;
+      default:
+        return 0;
+    }
+  };
 
   const containerVariants: Variants = {
-    hidden: {},
+    hidden: { opacity: 1 },
     visible: {
+      opacity: 1,
       transition: {
-        staggerChildren: speed,
-        onComplete: onComplete,
+        staggerChildren: delay / 1000,
       },
     },
   };
 
   const itemVariants: Variants = {
     hidden: {
-      filter: `blur(${blurAmount})`,
       opacity: 0,
-      y: yOffset,
+      filter: "blur(10px)",
+      y: getTransform(direction),
+      x: getTransformX(direction),
     },
     visible: {
-      filter: "blur(0px)",
       opacity: 1,
+      filter: "blur(0px)",
       y: 0,
-      transition: {
-        type: "spring",
-        damping: 25,
-        stiffness: 120,
-      },
+      x: 0,
+      transition: { type: "spring", stiffness: 100, damping: 20 },
     },
   };
 
   return (
     <motion.div
-      ref={containerRef}
-      initial="hidden"
-      animate={shouldAnimate ? "visible" : "hidden"}
       variants={containerVariants}
-      className={`inline-flex flex-wrap ${className}`}
+      initial="hidden"
+      animate="visible"
+      className={`inline-flex ${className}`}
+      onAnimationComplete={onAnimationComplete}
     >
       {elements.map((el, i) => (
         <motion.span
           key={i}
           variants={itemVariants}
-          style={{ display: "inline-block", whiteSpace: "pre" }}
-          className={animateBy === "words" ? "mr-2" : ""}
+          className="inline-block"
+          style={animateBy === "words" && i < elements.length - 1 ? { marginRight: "0.25em" } : {}}
         >
-          {el === " " && animateBy === "chars" ? "\u00A0" : el}
+          {el === " " ? "\u00A0" : el}
         </motion.span>
       ))}
     </motion.div>

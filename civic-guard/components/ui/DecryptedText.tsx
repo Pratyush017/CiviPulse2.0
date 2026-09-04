@@ -1,93 +1,121 @@
 "use client";
 
-import React, { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef } from 'react';
+import { motion } from 'motion/react';
 
 interface DecryptedTextProps {
   text: string;
-  speed?: number; // interval between letter changes in ms
-  scrambleChars?: string;
-  triggerOn?: "view" | "hover" | "always";
+  speed?: number;
+  maxIterations?: number;
+  sequential?: boolean;
+  revealDirection?: "start" | "end" | "center";
+  useOriginalCharsOnly?: boolean;
+  characters?: string;
   className?: string;
+  parentClassName?: string;
+  encryptedClassName?: string;
+  animateOn?: "view" | "hover";
+  clickMode?: "toggle" | "once";
 }
 
-export function DecryptedText({
+export default function DecryptedText({
   text,
-  speed = 40,
-  scrambleChars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*()_+",
-  triggerOn = "view",
+  speed = 50,
+  maxIterations = 10,
+  sequential = false,
+  revealDirection = "start",
+  useOriginalCharsOnly = false,
+  characters = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz!@#$%^&*()_+",
   className = "",
+  parentClassName = "",
+  encryptedClassName = "",
+  animateOn = "hover",
+  clickMode,
 }: DecryptedTextProps) {
   const [displayText, setDisplayText] = useState(text);
-  const [isHovered, setIsHovered] = useState(false);
-  const containerRef = useRef<HTMLSpanElement>(null);
-  const animationRef = useRef<NodeJS.Timeout | null>(null);
+  const [isHovering, setIsHovering] = useState(false);
+  const [isAnimating, setIsAnimating] = useState(false);
+  const iterationRef = useRef(0);
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  const startAnimation = () => {
+    if (isAnimating) return;
+    setIsAnimating(true);
+    iterationRef.current = 0;
+    
+    if (timeoutRef.current) clearInterval(timeoutRef.current);
+    
+    timeoutRef.current = setInterval(() => {
+      setDisplayText((currentText) => {
+        const newText = text.split("").map((letter, index) => {
+          if (letter === " ") return " ";
+          
+          let iterationLimit = maxIterations;
+          if (sequential) {
+            if (revealDirection === "start") {
+              iterationLimit = maxIterations + index * 2;
+            } else if (revealDirection === "end") {
+              iterationLimit = maxIterations + (text.length - index) * 2;
+            }
+          }
+          
+          if (iterationRef.current >= iterationLimit) {
+            return text[index];
+          }
+          
+          if (useOriginalCharsOnly) {
+            return text[Math.floor(Math.random() * text.length)];
+          }
+          
+          return characters[Math.floor(Math.random() * characters.length)];
+        });
+        
+        iterationRef.current += 1;
+        
+        const maxTotalIterations = sequential ? maxIterations + text.length * 2 : maxIterations;
+        if (iterationRef.current >= maxTotalIterations) {
+          if (timeoutRef.current) clearInterval(timeoutRef.current);
+          setIsAnimating(false);
+          return text;
+        }
+        
+        return newText.join("");
+      });
+    }, speed);
+  };
 
   useEffect(() => {
-    let isInView = false;
-    let observer: IntersectionObserver | null = null;
-
-    const startAnimation = () => {
-      let iteration = 0;
-      if (animationRef.current) clearInterval(animationRef.current);
-
-      animationRef.current = setInterval(() => {
-        const scrambled = text
-          .split("")
-          .map((char, index) => {
-            if (char === " ") return " ";
-            if (index < iteration) {
-              return text[index];
-            }
-            return scrambleChars[Math.floor(Math.random() * scrambleChars.length)];
-          })
-          .join("");
-
-        setDisplayText(scrambled);
-
-        if (iteration >= text.length) {
-          if (animationRef.current) clearInterval(animationRef.current);
-        }
-
-        iteration += 1 / 3;
-      }, speed);
+    return () => {
+      if (timeoutRef.current) clearInterval(timeoutRef.current);
     };
+  }, []);
 
-    if (triggerOn === "view") {
-      observer = new IntersectionObserver(
-        (entries) => {
-          entries.forEach((entry) => {
-            if (entry.isIntersecting && !isInView) {
-              isInView = true;
-              startAnimation();
-            }
-          });
-        },
-        { threshold: 0.1 }
-      );
-
-      if (containerRef.current) {
-        observer.observe(containerRef.current);
-      }
-    } else if (triggerOn === "always") {
-      startAnimation();
-    } else if (triggerOn === "hover" && isHovered) {
+  const handleMouseEnter = () => {
+    if (animateOn === "hover") {
+      setIsHovering(true);
       startAnimation();
     }
+  };
 
-    return () => {
-      if (animationRef.current) clearInterval(animationRef.current);
-      if (observer) observer.disconnect();
-    };
-  }, [text, speed, scrambleChars, triggerOn, isHovered]);
+  const handleMouseLeave = () => {
+    if (animateOn === "hover") {
+      setIsHovering(false);
+      if (timeoutRef.current) clearInterval(timeoutRef.current);
+      setIsAnimating(false);
+      setDisplayText(text);
+    }
+  };
 
   return (
-    <span
-      ref={containerRef}
-      onMouseEnter={() => triggerOn === "hover" && setIsHovered(true)}
-      onMouseLeave={() => triggerOn === "hover" && setIsHovered(false)}
-      className={`font-mono inline-block ${className}`}
+    <motion.span
+      className={`inline-block ${parentClassName}`}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
+      onClick={() => clickMode && startAnimation()}
     >
-      {displayText}
-    </span>
+      <span className={isAnimating || isHovering ? encryptedClassName : className}>
+        {displayText}
+      </span>
+    </motion.span>
   );
 }

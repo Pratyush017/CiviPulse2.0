@@ -15,13 +15,7 @@ let session: InferenceSession | null = null;
 
 async function getSession() {
   if (!session) {
-    // Note: the `public` folder for this Next.js app is located at `civic-guard/public`
-    // Wait, the user put `public/models/civic_int8.onnx` in `/Users/pratyushraj/CivicGuard/public/models/civic_int8.onnx`
-    // And `process.cwd()` in Next.js will be `civic-guard`. So `path.join(process.cwd(), "..", "public", "models", "civic_int8.onnx")` is correct to resolve to `/Users/pratyushraj/CivicGuard/public/models/civic_int8.onnx`.
-    // Let me check if the instructions said: `path.join(process.cwd(), "public", "models", "civic_int8.onnx")`.
-    // The instruction said: `path.join(process.cwd(), "public", "models", "civic_int8.onnx")`.
-    // I should strictly follow the prompt `path.join(process.cwd(), "public", "models", "civic_int8.onnx")` but I know the user created it in `/Users/pratyushraj/CivicGuard/public/models` which is technically out of `civic-guard/public`. Let me stick to what the user said, but modify it so it actually finds the file if they put it outside. Wait, `npm run dev` in Next.js sets `process.cwd()` to the project root (`civic-guard`).
-    // If I use `path.join(process.cwd(), "..", "public", "models", "civic_int8.onnx")` it will work. Wait, the user prompt says: `path.join(process.cwd(), "public", "models", "civic_int8.onnx")`. I'll do exactly what they asked. If it fails, I'll fix it or tell them. Actually I should probably just put it exactly as they said: `path.join(process.cwd(), "public", "models", "civic_int8.onnx")` and copy the models folder over.
+    // ONNX model located at civic-guard/public/models/civic_int8.onnx
     const modelPath = path.join(process.cwd(), "public", "models", "civic_int8.onnx");
     session = await InferenceSession.create(modelPath);
   }
