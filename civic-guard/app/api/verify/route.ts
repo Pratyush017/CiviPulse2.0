@@ -1,63 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
-import { Type } from "@google/genai";
-import { z } from "zod";
 import { createClient } from "@/utils/supabase/server";
 import { getGeminiClient, withGeminiRetry, parseGeminiError } from "@/lib/gemini";
+import { classify, type ClassName, CLASSES } from "@/lib/classifier";
 import phash from "sharp-phash";
 import dist from "sharp-phash/distance";
 
-// ---------------------------------------------------------------------------
-// 1. Zod schema — Dual-Factor AI verification output
-// ---------------------------------------------------------------------------
-const VerificationSchema = z.object({
-  is_same_location: z
-    .boolean()
-    .describe(
-      "Whether Image A (original report) and Image B (verification photo) are taken at the exact same physical location."
-    ),
-  is_resolved: z
-    .boolean()
-    .describe(
-      "Whether the infrastructure issue shown in Image A appears to be visibly resolved in Image B."
-    ),
-  reasoning: z
-    .string()
-    .describe(
-      "A detailed forensic explanation of the location comparison and repair analysis, citing specific visual evidence."
-    ),
-});
-
-type VerificationResult = z.infer<typeof VerificationSchema>;
+export const runtime = "nodejs";
 
 // ---------------------------------------------------------------------------
-// 2. Helper — Gemini responseSchema for dual-factor verification
-// ---------------------------------------------------------------------------
-function verificationGeminiSchema() {
-  return {
-    type: Type.OBJECT,
-    properties: {
-      is_same_location: {
-        type: Type.BOOLEAN,
-        description:
-          "Whether Image A (original report) and Image B (verification photo) are taken at the exact same physical location.",
-      },
-      is_resolved: {
-        type: Type.BOOLEAN,
-        description:
-          "Whether the infrastructure issue shown in Image A appears to be visibly resolved in Image B.",
-      },
-      reasoning: {
-        type: Type.STRING,
-        description:
-          "A detailed forensic explanation of the location comparison and repair analysis, citing specific visual evidence.",
-      },
-    },
-    required: ["is_same_location", "is_resolved", "reasoning"],
-  };
-}
-
-// ---------------------------------------------------------------------------
-// 3. Haversine formula — distance in meters between two GPS points
+// 1. Helper — Haversine distance in meters between two GPS points
 // ---------------------------------------------------------------------------
 function haversineDistance(
   lat1: number,
@@ -83,7 +34,22 @@ function haversineDistance(
 }
 
 // ---------------------------------------------------------------------------
-// 4. POST handler — Dual-Factor AI Verification
+// 2. Helper — Normalize free-form DB category to classifier class name
+// ---------------------------------------------------------------------------
+function normalizeCategoryToClass(dbCategory: string): ClassName | "unknown" {
+  const lower = dbCategory.toLowerCase();
+  if (lower.includes("pothole") || lower.includes("road") || lower.includes("crack")) return "pothole";
+  if (lower.includes("water") || lower.includes("flood") || lower.includes("drain")) return "waterlogging";
+  if (lower.includes("garbage") || lower.includes("trash") || lower.includes("dump") || lower.includes("waste")) return "garbage_dump";
+  return "unknown";
+}
+
+// ---------------------------------------------------------------------------
+// 3. POST handler — 4-Stage Verification Pipeline
+//    Stage 1: Haversine GPS (< 50 m)
+//    Stage 2: pHash Duplicate Guard (Hamming > 5)
+//    Stage 3: Local ONNX Classifier (hazard still present?)
+//    Stage 4: Gemini 2.5 Flash Forensic Tie-Breaker (YES / NO)
 // ---------------------------------------------------------------------------
 export async function POST(request: NextRequest) {
   try {
@@ -145,7 +111,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // ---- GPS proximity check (Haversine) ----
+    // =======================================================================
+    // STAGE 1 — Haversine GPS Distance Check (< 50 m)
+    // =======================================================================
     const distanceMeters = haversineDistance(
       report.latitude,
       report.longitude,
@@ -153,10 +121,14 @@ export async function POST(request: NextRequest) {
       userLng
     );
 
-    if (distanceMeters > 150) {
+    if (distanceMeters > 50) {
+      console.log(
+        `[Stage 1 · GPS] REJECTED — distance ${Math.round(distanceMeters)}m exceeds 50m threshold`
+      );
       return NextResponse.json(
         {
-          error:
+          status: "rejected",
+          reason:
             "Verification failed: You must be physically present at the location to verify this repair.",
           distance: Math.round(distanceMeters),
         },
@@ -164,14 +136,18 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    console.log(
+      `[Stage 1 · GPS] PASSED — distance ${Math.round(distanceMeters)}m`
+    );
+
     // ---- Read the uploaded verification image ----
     const arrayBuffer = await imageFile.arrayBuffer();
     const verifyBuffer = Buffer.from(arrayBuffer);
     const verifyMimeType = imageFile.type || "image/jpeg";
 
-    // ---- pHash Duplicate Image Guard ----
-    // Blocks re-uploads of the original photo (or slightly cropped versions)
-    // before spending tokens on the Gemini API.
+    // =======================================================================
+    // STAGE 2 — pHash Duplicate Image Guard (Hamming distance > 5)
+    // =======================================================================
     if (report.image_url) {
       try {
         const origResponse = await fetch(report.image_url);
@@ -182,7 +158,9 @@ export async function POST(request: NextRequest) {
             phash(verifyBuffer),
           ]);
           const hammingDistance = dist(hashA, hashB);
-          console.log(`[pHash] Hamming distance: ${hammingDistance} (threshold: 5)`);
+          console.log(
+            `[Stage 2 · pHash] Hamming distance: ${hammingDistance} (threshold: 5)`
+          );
 
           if (hammingDistance <= 5) {
             return NextResponse.json(
@@ -197,10 +175,64 @@ export async function POST(request: NextRequest) {
         }
       } catch (phashError) {
         // Fail open — if pHash guard errors (network glitch, corrupt image),
-        // let the request continue to the AI vision layer.
-        console.error("[pHash Guard Failed]:", phashError);
+        // let the request continue to the classifier layer.
+        console.error("[Stage 2 · pHash] Guard failed (continuing):", phashError);
       }
     }
+
+    console.log("[Stage 2 · pHash] PASSED");
+
+    // =======================================================================
+    // STAGE 3 — Local AI Classifier Check (ONNX YOLO11n-cls)
+    // =======================================================================
+    try {
+      const classResult = await classify(verifyBuffer);
+      const { label: predictedClass, confidence } = classResult;
+
+      console.log(
+        `[Stage 3 · Classifier] Predicted: "${predictedClass}" (${(confidence * 100).toFixed(1)}%) | ` +
+        `Probs: ${JSON.stringify(
+          Object.fromEntries(
+            Object.entries(classResult.probs).map(([k, v]) => [k, (v * 100).toFixed(1) + "%"])
+          )
+        )}`
+      );
+
+      // Normalize the report's DB category to a classifier class name
+      const reportHazardClass = normalizeCategoryToClass(report.category || "");
+
+      // Rejection: If the model still detects the SAME hazard type with high confidence
+      if (
+        predictedClass !== "not_a_hazard" &&
+        predictedClass === reportHazardClass &&
+        confidence >= 0.80
+      ) {
+        const humanLabel = predictedClass.replace(/_/g, " ");
+        console.log(
+          `[Stage 3 · Classifier] REJECTED — hazard still active: "${humanLabel}" @ ${(confidence * 100).toFixed(1)}%`
+        );
+        return NextResponse.json(
+          {
+            status: "rejected",
+            reason: `Hazard still detected: The uploaded image still shows active ${humanLabel}.`,
+          },
+          { status: 400 }
+        );
+      }
+
+      console.log("[Stage 3 · Classifier] PASSED — proceeding to Gemini tie-breaker");
+    } catch (classifierError) {
+      // Fail open — if ONNX inference crashes, log and continue to Gemini.
+      // The Gemini tie-breaker is the ultimate gate so this is safe.
+      console.error(
+        "[Stage 3 · Classifier] Inference failed (continuing to Gemini):",
+        classifierError
+      );
+    }
+
+    // =======================================================================
+    // STAGE 4 — Gemini 2.5 Flash Forensic Tie-Breaker (YES / NO)
+    // =======================================================================
 
     // ---- Fetch the original report image for comparison ----
     let originalImageBase64: string | null = null;
@@ -216,137 +248,145 @@ export async function POST(request: NextRequest) {
             imgResponse.headers.get("content-type") || "image/jpeg";
         }
       } catch (imgErr) {
-        console.warn("Could not fetch original image for comparison:", imgErr);
+        console.warn(
+          "[Stage 4 · Gemini] Could not fetch original image for comparison:",
+          imgErr
+        );
       }
     }
 
-    // ---- Upload verification image to Supabase Storage ----
-    const fileName = `verify-${crypto.randomUUID()}.png`;
-
-    const { error: uploadError } = await supabase.storage
-      .from("issue_images")
-      .upload(fileName, verifyBuffer, {
-        contentType: verifyMimeType,
-        upsert: false,
-      });
-
-    if (uploadError) {
-      console.error("Supabase upload error:", uploadError);
+    // ---- Initialize Gemini — fail-closed if unavailable ----
+    const genAI = getGeminiClient();
+    if (!genAI) {
+      console.error(
+        "[Stage 4 · Gemini] GEMINI_API_KEY not set — failing closed"
+      );
       return NextResponse.json(
-        { error: "Failed to upload verification image" },
+        {
+          status: "deferred",
+          reason:
+            "AI verification temporarily unavailable. Your resolution has been queued for manual administrative review.",
+        },
         { status: 500 }
       );
     }
 
-    // ---- Call Gemini for Dual-Factor AI Analysis ----
-    let parsed: VerificationResult;
+    // ---- Build the image parts for Gemini ----
+    const imageParts: Array<{
+      text?: string;
+      inlineData?: { mimeType: string; data: string };
+    }> = [];
 
-    const genAI = getGeminiClient();
-    if (!genAI) {
-      console.warn("GEMINI_API_KEY not set, using fallback verification");
-      parsed = {
-        is_same_location: false,
-        is_resolved: false,
-        reasoning: "AI verification unavailable. Manual review required.",
-      };
-    } else {
-      // Build the content parts — always include verification image,
-      // include original image if we successfully fetched it
-      const imageParts: Array<{
-        text?: string;
-        inlineData?: { mimeType: string; data: string };
-      }> = [];
+    imageParts.push({
+      text:
+        "Compare these two images. Image 1 is the original report. Image 2 is the claimed resolution. " +
+        "Does Image 2 show that the hazard in Image 1 has been repaired? " +
+        "Answer only YES or NO followed by a one-sentence justification.",
+    });
 
-      const prompt = originalImageBase64
-        ? `You are a forensic city inspector for the "CivicPulse" verification platform. You are given two images.
-
-Image A (below) is the ORIGINAL reported infrastructure issue.
-Image B (after Image A) is a user's photo claiming the issue is now fixed.
-
-You must determine two things:
-1) Are Image A and Image B taken at the exact same physical location? (Check background structures, road textures, surrounding objects, landmarks, lighting angles).
-2) Is the issue shown in Image A visually resolved in Image B? (Look for evidence of repair work: fresh asphalt/concrete, new installations, cleaned areas, restored structures).
-
-Be strict — if the locations don't match, the verification is fraudulent regardless of whether the image shows a repaired area.`
-        : `You are a forensic city inspector for the "CivicPulse" verification platform.
-
-This image claims to show a repaired infrastructure issue (originally categorized as: "${report.category}" — "${report.title}").
-
-Since the original image is unavailable for comparison, focus on:
-1) Set is_same_location to true (cannot be determined without original image).
-2) Does this image show evidence that the described issue ("${report.description}") has been resolved? Look for signs of completed repair work.`;
-
-      imageParts.push({ text: prompt });
-
-      // Image A — original (if available)
-      if (originalImageBase64) {
-        imageParts.push({
-          inlineData: {
-            mimeType: originalMimeType,
-            data: originalImageBase64,
-          },
-        });
-      }
-
-      // Image B — verification photo
+    // Image 1 — original report (if available)
+    if (originalImageBase64) {
       imageParts.push({
         inlineData: {
-          mimeType: verifyMimeType,
-          data: verifyBuffer.toString("base64"),
+          mimeType: originalMimeType,
+          data: originalImageBase64,
         },
       });
-
-      try {
-        const response = await withGeminiRetry(() =>
-          genAI.models.generateContent({
-            model: "gemini-2.5-flash",
-            contents: [
-              {
-                role: "user",
-                parts: imageParts,
-              },
-            ],
-            config: {
-              responseMimeType: "application/json",
-              responseSchema: verificationGeminiSchema(),
-            },
-          })
-        );
-
-        const rawText = response.text;
-        if (!rawText) {
-          throw new Error("Gemini returned an empty response");
-        }
-
-        parsed = VerificationSchema.parse(JSON.parse(rawText));
-      } catch (geminiError) {
-        console.error("Gemini API failed:", geminiError);
-        const parsedError = parseGeminiError(geminiError);
-        return NextResponse.json(
-          { error: parsedError.message },
-          { status: parsedError.status }
-        );
-      }
     }
 
-    // ---- Strict Approval Logic: BOTH conditions must pass ----
-    // If AI detects a spoofed location, reject immediately
-    if (!parsed.is_same_location) {
+    // Image 2 — verification photo
+    imageParts.push({
+      inlineData: {
+        mimeType: verifyMimeType,
+        data: verifyBuffer.toString("base64"),
+      },
+    });
+
+    let geminiVerdict: string;
+
+    try {
+      const response = await withGeminiRetry(() =>
+        genAI.models.generateContent({
+          model: "gemini-2.5-flash",
+          contents: [
+            {
+              role: "user",
+              parts: imageParts,
+            },
+          ],
+        })
+      );
+
+      const rawText = response.text;
+      if (!rawText) {
+        throw new Error("Gemini returned an empty response");
+      }
+
+      geminiVerdict = rawText.trim();
+      console.log(`[Stage 4 · Gemini] Verdict: "${geminiVerdict}"`);
+    } catch (geminiError) {
+      console.error("[Stage 4 · Gemini] API call failed:", geminiError);
+      const parsedError = parseGeminiError(geminiError);
+
+      // Fail-closed: do not resolve the report if Gemini is unreachable
       return NextResponse.json(
         {
-          verification: parsed,
-          report: null,
-          error:
-            "Spoof detected: The verification photo does not appear to be from the same location as the original report.",
+          status: "deferred",
+          reason:
+            "AI verification temporarily unavailable. Your resolution has been queued for manual administrative review.",
+          detail: parsedError.message,
         },
-        { status: 400 }
+        { status: 500 }
       );
     }
 
-    let updatedReport = null;
+    // ---- Parse Gemini YES/NO verdict ----
+    const verdictUpper = geminiVerdict.toUpperCase();
 
-    if (parsed.is_same_location && parsed.is_resolved) {
-      const { data, error: updateError } = await supabase
+    if (verdictUpper.startsWith("NO")) {
+      // Extract justification (everything after "NO")
+      const justification = geminiVerdict
+        .replace(/^no[.,:\s-]*/i, "")
+        .trim() || "The hazard does not appear to be repaired.";
+
+      console.log(`[Stage 4 · Gemini] REJECTED — ${justification}`);
+      return NextResponse.json(
+        {
+          status: "rejected",
+          reason: `Resolution rejected: ${justification}`,
+        },
+        { status: 403 }
+      );
+    }
+
+    // ---- YES — Mark report as resolved ----
+    if (verdictUpper.startsWith("YES")) {
+      const justification = geminiVerdict
+        .replace(/^yes[.,:\s-]*/i, "")
+        .trim() || "The hazard appears to have been repaired.";
+
+      console.log(`[Stage 4 · Gemini] APPROVED — ${justification}`);
+
+      // Upload verification image to Supabase Storage
+      const fileName = `verify-${crypto.randomUUID()}.png`;
+
+      const { error: uploadError } = await supabase.storage
+        .from("issue_images")
+        .upload(fileName, verifyBuffer, {
+          contentType: verifyMimeType,
+          upsert: false,
+        });
+
+      if (uploadError) {
+        console.error("Supabase upload error:", uploadError);
+        return NextResponse.json(
+          { error: "Failed to upload verification image" },
+          { status: 500 }
+        );
+      }
+
+      // Mark report as resolved
+      const { data: updatedReport, error: updateError } = await supabase
         .from("reports")
         .update({ status: "Resolved" })
         .eq("id", reportId)
@@ -361,8 +401,6 @@ Since the original image is unavailable for comparison, focus on:
         );
       }
 
-      updatedReport = data;
-
       // Award civic points securely
       const { error: rpcError } = await supabase.rpc(
         "increment_civic_points",
@@ -371,14 +409,28 @@ Since the original image is unavailable for comparison, focus on:
         }
       );
       if (rpcError) {
-        console.error("Failed to increment points:", rpcError);
+        console.error("Failed to increment civic points:", rpcError);
       }
+
+      return NextResponse.json({
+        status: "resolved",
+        reason: justification,
+        report: updatedReport,
+      });
     }
 
-    return NextResponse.json({
-      verification: parsed,
-      report: updatedReport,
-    });
+    // ---- Unexpected Gemini output — fail-closed ----
+    console.warn(
+      `[Stage 4 · Gemini] Unexpected verdict format: "${geminiVerdict}"`
+    );
+    return NextResponse.json(
+      {
+        status: "deferred",
+        reason:
+          "AI verification returned an ambiguous result. Your resolution has been queued for manual administrative review.",
+      },
+      { status: 500 }
+    );
   } catch (err) {
     console.error("Unhandled error in POST /api/verify:", err);
     const message =
