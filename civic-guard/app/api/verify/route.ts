@@ -2,8 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/utils/supabase/server";
 import { getGeminiClient, withGeminiRetry, parseGeminiError } from "@/lib/gemini";
 import type { ClassName } from "@/lib/classifier";
-import phash from "sharp-phash";
-import dist from "sharp-phash/distance";
 
 export const runtime = "nodejs";
 
@@ -150,6 +148,10 @@ export async function POST(request: NextRequest) {
     // =======================================================================
     if (report.image_url) {
       try {
+        // Dynamic import — avoids bundling sharp native bindings into this
+        // serverless function at build time (prevents Vercel cold-start crash).
+        const phash = (await import("sharp-phash")).default;
+        const dist = (await import("sharp-phash/distance")).default;
         const origResponse = await fetch(report.image_url);
         if (origResponse.ok) {
           const origBuffer = Buffer.from(await origResponse.arrayBuffer());
