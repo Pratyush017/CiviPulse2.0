@@ -131,9 +131,8 @@ export default function DashboardPage() {
   const [verifyDragActive, setVerifyDragActive] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
   const [verifyResult, setVerifyResult] = useState<{
-    is_same_location: boolean;
-    is_resolved: boolean;
-    reasoning: string;
+    status: "resolved" | "rejected" | "deferred";
+    reason: string;
   } | null>(null);
 
   // Toast state
@@ -584,29 +583,19 @@ export default function DashboardPage() {
 
       if (!res.ok) {
         const err = await res.json();
-        // If it's a spoof detection with verification data, show the reasoning
-        if (err.verification) {
-          setVerifyResult(err.verification);
-          setToast({
-            message: err.error ?? "Verification rejected by AI.",
-            type: "error",
-          });
-          return;
-        }
-        throw new Error(err.error ?? "Verification failed");
+        // New pipeline returns { status, reason } on rejection/deferral
+        const message =
+          err.reason ?? err.error ?? "Verification failed";
+        setToast({ message, type: "error" });
+        return;
       }
 
       const data = await res.json();
-      const verification = data.verification as {
-        is_same_location: boolean;
-        is_resolved: boolean;
-        reasoning: string;
-      };
 
-      setVerifyResult(verification);
+      // New pipeline: { status: "resolved", reason: "...", report: {...} }
+      setVerifyResult({ status: data.status, reason: data.reason });
 
-      if (verification.is_same_location && verification.is_resolved) {
-        // Update local state to show 'Resolved'
+      if (data.status === "resolved") {
         setReports((prev) =>
           prev.map((r) =>
             r.id === verifyingReport.id ? { ...r, status: "Resolved" } : r
@@ -626,15 +615,10 @@ export default function DashboardPage() {
           setVerifyDialogOpen(false);
           resetVerifyForm();
         }, 2500);
-      } else if (!verification.is_same_location) {
-        setToast({
-          message:
-            "Location mismatch detected. Photos must be from the same spot.",
-          type: "error",
-        });
       } else {
         setToast({
-          message: "AI could not confirm the fix. Issue remains active.",
+          message:
+            data.reason ?? "AI could not confirm the fix. Issue remains active.",
           type: "info",
         });
       }
@@ -1588,65 +1572,31 @@ export default function DashboardPage() {
               {verifyResult && (
                 <div
                   className={`rounded-lg border p-3 ${
-                    verifyResult.is_same_location && verifyResult.is_resolved
+                    verifyResult.status === "resolved"
                       ? "border-emerald-500/40 bg-emerald-500/10"
-                      : !verifyResult.is_same_location
-                        ? "border-red-500/40 bg-red-500/10"
-                        : "border-amber-500/40 bg-amber-500/10"
+                      : "border-red-500/40 bg-red-500/10"
                   }`}
                 >
-                  {/* Location match indicator */}
-                  <div className="flex items-center gap-2 mb-1.5">
-                    {verifyResult.is_same_location ? (
+                  <div className="flex items-center gap-2 mb-2">
+                    {verifyResult.status === "resolved" ? (
                       <CheckCircle2 className="size-4 text-emerald-400" />
                     ) : (
                       <XCircle className="size-4 text-red-400" />
                     )}
                     <span
-                      className={`text-xs font-semibold ${
-                        verifyResult.is_same_location
-                          ? "text-emerald-400"
-                          : "text-red-400"
+                      className={`text-sm font-bold ${
+                        verifyResult.status === "resolved"
+                          ? "text-emerald-300"
+                          : "text-red-300"
                       }`}
                     >
-                      {verifyResult.is_same_location
-                        ? "Location Verified ✓"
-                        : "Location Mismatch ✗"}
+                      {verifyResult.status === "resolved"
+                        ? "✓ Verification Passed — Issue Confirmed Resolved"
+                        : "✗ Verification Failed"}
                     </span>
-                  </div>
-                  {/* Resolution indicator */}
-                  <div className="flex items-center gap-2 mb-2">
-                    {verifyResult.is_resolved ? (
-                      <CheckCircle2 className="size-4 text-emerald-400" />
-                    ) : (
-                      <XCircle className="size-4 text-amber-400" />
-                    )}
-                    <span
-                      className={`text-xs font-semibold ${
-                        verifyResult.is_resolved
-                          ? "text-emerald-400"
-                          : "text-amber-400"
-                      }`}
-                    >
-                      {verifyResult.is_resolved
-                        ? "Issue Resolved ✓"
-                        : "Issue Not Resolved"}
-                    </span>
-                  </div>
-                  {/* Overall verdict */}
-                  <div className={`text-sm font-bold mb-1.5 ${
-                    verifyResult.is_same_location && verifyResult.is_resolved
-                      ? "text-emerald-300"
-                      : "text-red-300"
-                  }`}>
-                    {verifyResult.is_same_location && verifyResult.is_resolved
-                      ? "✓ Verification Passed — Issue Confirmed Resolved"
-                      : !verifyResult.is_same_location
-                        ? "✗ Verification Failed — Spoof Detected"
-                        : "✗ Verification Failed — Issue Still Active"}
                   </div>
                   <p className="text-xs text-slate-400 leading-relaxed">
-                    {verifyResult.reasoning}
+                    {verifyResult.reason}
                   </p>
                 </div>
               )}
