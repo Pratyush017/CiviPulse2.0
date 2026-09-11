@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/utils/supabase/server";
 import { getGeminiClient, withGeminiRetry, parseGeminiError } from "@/lib/gemini";
-import { classify, type ClassName, CLASSES } from "@/lib/classifier";
+import type { ClassName } from "@/lib/classifier";
 import phash from "sharp-phash";
 import dist from "sharp-phash/distance";
 
@@ -186,6 +186,9 @@ export async function POST(request: NextRequest) {
     // STAGE 3 — Local AI Classifier Check (ONNX YOLO11n-cls)
     // =======================================================================
     try {
+      // Dynamic import — avoids bundling onnxruntime-node into this
+      // serverless function at build time (prevents Vercel cold-start crash).
+      const { classify } = await import("@/lib/classifier");
       const classResult = await classify(verifyBuffer);
       const { label: predictedClass, confidence } = classResult;
 
