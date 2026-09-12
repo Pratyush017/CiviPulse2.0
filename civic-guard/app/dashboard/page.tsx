@@ -54,7 +54,6 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Toast } from "@/components/Toast";
-import GradualBlur from "@/components/ui/GradualBlur";
 import { StaggeredMenu } from "@/components/ui/StaggeredMenu";
 import AnimatedItem from "@/components/ui/AnimatedItem";
 import StarBorder from "@/components/ui/StarBorder";
@@ -62,7 +61,6 @@ import TiltedCard from "@/components/ui/TiltedCard";
 import BorderGlow from "@/components/ui/BorderGlow";
 import Folder from "@/components/ui/Folder";
 import GooeyNav from "@/components/ui/GooeyNav";
-import LaserFlow from "@/components/ui/LaserFlow";
 import RotatingText from "@/components/ui/RotatingText";
 import { createClient } from "@/utils/supabase/client";
 import { HeaderActions } from "@/components/ui/LoginButton";
@@ -1171,8 +1169,8 @@ export default function DashboardPage() {
 
 
             
-            {/* Smooth blur fade for the scrollable feed */}
-            <GradualBlur preset="bottom" height="4rem" zIndex={20} className="pointer-events-none" />
+            {/* Smooth gradient fade for the scrollable feed */}
+            <div className="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-slate-950 via-slate-950/60 to-transparent pointer-events-none z-20" />
             </motion.aside>
 
           {/* ────────── RIGHT COLUMN: Map & Interactions (65%) ────────── */}

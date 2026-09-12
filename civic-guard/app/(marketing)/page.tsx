@@ -231,6 +231,9 @@ export default function MarketingPage() {
           ease: "power2.inOut",
         }, 0);
 
+        // Hide curtain and unmount/pause its WebGL context when offscreen
+        introTl.set("#intro-curtain", { display: "none" }, 0.65);
+
         // 15-80%: Hero content fades in (slightly delayed behind curtain)
         introTl.to("#hero-content", {
           opacity: 1,
@@ -577,7 +580,8 @@ export default function MarketingPage() {
           </motion.div>
         </div>
 
-        <GradualBlur preset="bottom" height="4rem" zIndex={20} className="pointer-events-none" />
+        {/* Smooth GPU-composited bottom fade into next section */}
+        <div className="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-black via-black/60 to-transparent pointer-events-none z-20" />
       </section>
 
       {/* ═══════════════════════ 2. HOW IT WORKS (CLEAN PINNED SEQUENCE) ═══════════════════════ */}

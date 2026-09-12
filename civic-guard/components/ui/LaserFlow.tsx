@@ -22,6 +22,7 @@ type Props = {
   falloffStart?: number;
   fogFallSpeed?: number;
   color?: string;
+  paused?: boolean;
 };
 
 const VERT = `
@@ -68,7 +69,7 @@ uniform float uFade;
 #define EPS 1e-6
 #define EDGE_SOFT (DT_LOCAL*4.0)
 #define DT_LOCAL 0.0038
-#define TAP_RADIUS 6
+#define TAP_RADIUS 4
 #define R_H 150.0
 #define R_V 150.0
 #define FLARE_HEIGHT 16.0
@@ -82,7 +83,7 @@ uniform float uFade;
 // Wisps (animated micro-streaks) that travel along the beam
 #define W_BASE_X 1.5
 #define W_LAYER_GAP 0.25
-#define W_LANES 10
+#define W_LANES 8
 #define W_SIDE_DECAY 0.5
 #define W_HALF 0.01
 #define W_AA 0.15
@@ -98,7 +99,7 @@ uniform float uFade;
 #define FOG_CONTRAST 1.2
 #define FOG_SPEED_U 0.1
 #define FOG_SPEED_V -0.1
-#define FOG_OCTAVES 5
+#define FOG_OCTAVES 3
 #define FOG_BOTTOM_BIAS 0.8
 #define FOG_TILT_TO_MOUSE 0.05
 #define FOG_TILT_DEADZONE 0.01
@@ -292,7 +293,8 @@ export const LaserFlow: React.FC<Props> = ({
   decay = 1.1,
   falloffStart = 1.2,
   fogFallSpeed = 0.6,
-  color = '#FF79C6'
+  color = '#FF79C6',
+  paused = false
 }) => {
   const mountRef = useRef<HTMLDivElement | null>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
@@ -305,8 +307,12 @@ export const LaserFlow: React.FC<Props> = ({
   const fpsSamplesRef = useRef<number[]>([]);
   const lastFpsCheckRef = useRef<number>(performance.now());
   const emaDtRef = useRef<number>(16.7);
-  const pausedRef = useRef<boolean>(false);
+  const pausedRef = useRef<boolean>(paused);
   const inViewRef = useRef<boolean>(true);
+
+  useEffect(() => {
+    pausedRef.current = paused;
+  }, [paused]);
 
   const mouseSmoothTimeRef = useRef(mouseSmoothTime);
   useEffect(() => {
@@ -328,7 +334,8 @@ export const LaserFlow: React.FC<Props> = ({
     });
     rendererRef.current = renderer;
 
-    baseDprRef.current = Math.min(dpr ?? (window.devicePixelRatio || 1), 2);
+    const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
+    baseDprRef.current = Math.min(dpr ?? (isMobile ? 1.0 : (window.devicePixelRatio || 1)), isMobile ? 1.0 : 1.25);
     currentDprRef.current = baseDprRef.current;
 
     renderer.setPixelRatio(currentDprRef.current);
