@@ -683,8 +683,8 @@ export default function DashboardPage() {
           {/* Stats row */}
           <div className="hidden items-center gap-3 md:flex">
             <div className="cursor-pointer transition-transform hover:scale-105 active:scale-95" onClick={() => setHighlightedFilter(p => p === 'active' ? null : 'active')}>
-              <BorderGlow borderRadius={30} backgroundColor="#000000" glowColor="173 80 50" colors={['#2dd4bf', '#14b8a6', '#0f766e']} edgeSensitivity={0} glowRadius={50} coneSpread={2}>
-                <div className={`flex items-center gap-2 px-3 py-1.5 rounded-[30px] border text-xs bg-teal-500/10 text-teal-400 transition-colors ${highlightedFilter === 'active' ? 'border-teal-400 bg-teal-500/20' : 'border-teal-500/20'}`}>
+              <BorderGlow borderRadius={30} backgroundColor="#000000" glowColor="173 80 50" colors={['#2dd4bf', '#14b8a6', '#0f766e']} edgeSensitivity={0} glowRadius={50} coneSpread={2} animated={highlightedFilter === 'active'} loopAnimation={highlightedFilter === 'active'}>
+                <div className={`flex items-center gap-2 px-3 py-1.5 rounded-[30px] border text-xs transition-colors ${highlightedFilter === 'active' ? 'border-teal-400 bg-[#0b0f19] text-teal-400' : 'bg-[#0b0f19] border-teal-500/20 text-teal-400'}`}>
                   <div className="w-1.5 h-1.5 rounded-full bg-teal-400 animate-[dot-breathe_2s_ease-in-out_infinite]" />
                   <span className="font-semibold font-display text-[#e8eaf0]">{activeReports.length}</span>
                   <span className="text-[#7a8199]">active</span>
@@ -692,8 +692,8 @@ export default function DashboardPage() {
               </BorderGlow>
             </div>
             <div className="cursor-pointer transition-transform hover:scale-105 active:scale-95" onClick={() => setHighlightedFilter(p => p === 'resolved' ? null : 'resolved')}>
-              <BorderGlow borderRadius={30} backgroundColor="#000000" glowColor="0 0 100" colors={['#ffffff', '#e5e7eb', '#d1d5db']} edgeSensitivity={0} glowRadius={50} coneSpread={2}>
-                <div className={`flex items-center gap-2 px-3 py-1.5 rounded-[30px] border text-xs bg-white/5 text-white transition-colors ${highlightedFilter === 'resolved' ? 'border-white bg-white/10' : 'border-white/10'}`}>
+              <BorderGlow borderRadius={30} backgroundColor="#000000" glowColor="0 0 100" colors={['#ffffff', '#e5e7eb', '#d1d5db']} edgeSensitivity={0} glowRadius={50} coneSpread={2} animated={highlightedFilter === 'resolved'} loopAnimation={highlightedFilter === 'resolved'}>
+                <div className={`flex items-center gap-2 px-3 py-1.5 rounded-[30px] border text-xs transition-colors ${highlightedFilter === 'resolved' ? 'border-white bg-[#0b0f19] text-white' : 'bg-[#0b0f19] border-white/10 text-white'}`}>
                   <div className="w-1.5 h-1.5 rounded-full bg-green-400" />
                   <span className="font-semibold font-display text-[#e8eaf0]">{resolvedReports.length}</span>
                   <span className="text-[#7a8199]">resolved</span>
@@ -701,8 +701,8 @@ export default function DashboardPage() {
               </BorderGlow>
             </div>
             <div className="cursor-pointer transition-transform hover:scale-105 active:scale-95" onClick={() => setHighlightedFilter(p => p === 'attention' ? null : 'attention')}>
-              <BorderGlow borderRadius={30} backgroundColor="#000000" glowColor="43 96 56" colors={['#fbbf24', '#f59e0b', '#d97706']} edgeSensitivity={0} glowRadius={50} coneSpread={2}>
-                <div className={`flex items-center gap-2 px-3 py-1.5 rounded-[30px] border text-xs bg-amber-500/10 text-amber-400 transition-colors ${highlightedFilter === 'attention' ? 'border-amber-400 bg-amber-500/20' : 'border-amber-500/20'}`}>
+              <BorderGlow borderRadius={30} backgroundColor="#000000" glowColor="43 96 56" colors={['#fbbf24', '#f59e0b', '#d97706']} edgeSensitivity={0} glowRadius={50} coneSpread={2} animated={highlightedFilter === 'attention'} loopAnimation={highlightedFilter === 'attention'}>
+                <div className={`flex items-center gap-2 px-3 py-1.5 rounded-[30px] border text-xs transition-colors ${highlightedFilter === 'attention' ? 'border-amber-400 bg-[#0b0f19] text-amber-400' : 'bg-[#0b0f19] border-amber-500/20 text-amber-400'}`}>
                   <div className="w-1.5 h-1.5 rounded-full bg-amber-400" />
                   <span className="font-semibold font-display text-[#e8eaf0]">{needsAttentionCount}</span>
                   <span className="text-[#7a8199]">attention</span>
@@ -710,8 +710,8 @@ export default function DashboardPage() {
               </BorderGlow>
             </div>
             <div className="cursor-pointer transition-transform hover:scale-105 active:scale-95" onClick={() => setHighlightedFilter(p => p === 'critical' ? null : 'critical')}>
-              <BorderGlow borderRadius={30} backgroundColor="#000000" glowColor="350 89 60" colors={['#f43f5e', '#e11d48', '#be123c']} edgeSensitivity={0} glowRadius={50} coneSpread={2}>
-                <div className={`flex items-center gap-2 px-3 py-1.5 rounded-[30px] border text-xs bg-rose-500/10 text-rose-400 transition-colors ${highlightedFilter === 'critical' ? 'border-rose-400 bg-rose-500/20' : 'border-rose-500/20'}`}>
+              <BorderGlow borderRadius={30} backgroundColor="#000000" glowColor="350 89 60" colors={['#f43f5e', '#e11d48', '#be123c']} edgeSensitivity={0} glowRadius={50} coneSpread={2} animated={highlightedFilter === 'critical'} loopAnimation={highlightedFilter === 'critical'}>
+                <div className={`flex items-center gap-2 px-3 py-1.5 rounded-[30px] border text-xs transition-colors ${highlightedFilter === 'critical' ? 'border-rose-400 bg-[#0b0f19] text-rose-400' : 'bg-[#0b0f19] border-rose-500/20 text-rose-400'}`}>
                   <div className="w-1.5 h-1.5 rounded-full bg-rose-400 animate-[dot-blink_1.8s_ease-in-out_infinite]" />
                   <span className="font-semibold font-display text-[#e8eaf0]">{criticalCount}</span>
                   <span className="text-[#7a8199]">critical</span>
@@ -1067,100 +1067,131 @@ export default function DashboardPage() {
 
                   return (
                     <AnimatedItem key={report.id} index={index} delay={Math.min(index * 0.03, 0.3)}>
-                      <div
-                        onClick={() => {
-                          setFocusedCoords({ lat: report.latitude, lng: report.longitude });
-                          setMobileView('map');
-                        }}
-                        className={`group relative rounded-2xl border transition-all duration-200 cursor-pointer p-3.5 flex flex-col gap-3 ${
-                          isHighlighted
-                            ? "bg-teal-500/10 border-teal-400 shadow-[0_0_25px_rgba(45,212,191,0.15)]"
-                            : "bg-[#0b0f19] border-slate-800/70 hover:border-slate-700 hover:bg-[#0f1422] shadow-sm"
-                        }`}
-                      >
-                        {/* Top content */}
-                        <div className="flex gap-3">
-                          {report.image_url ? (
-                            /* eslint-disable-next-line @next/next/no-img-element */
-                            <img
-                              src={report.image_url}
-                              className="w-14 h-14 rounded-xl object-cover flex-shrink-0 border border-white/5"
-                              alt={report.title}
-                            />
-                          ) : (
-                            <div className="w-14 h-14 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-center flex-shrink-0">
-                              <MapPin className="size-5 text-slate-600" />
-                            </div>
-                          )}
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-start justify-between gap-1">
-                              <p className="font-display font-semibold text-[13.5px] text-[#e8eaf0] leading-snug group-hover:text-teal-300 transition-colors line-clamp-1">
-                                {report.title}
-                              </p>
-                              {session?.user?.id === report.user_id && (
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleDeleteReport(report.id);
-                                  }}
-                                  className="text-slate-500 hover:text-rose-400 transition-colors p-0.5"
-                                  title="Delete your report"
-                                >
-                                  <Trash2 className="size-3.5" />
-                                </button>
-                              )}
-                            </div>
-                            <p className="text-xs text-slate-400 leading-relaxed line-clamp-2 mt-0.5">
-                              {report.description}
-                            </p>
-                          </div>
-                        </div>
-
-                        {/* Meta row */}
-                        <div className="flex items-center justify-between text-xs pt-1 border-t border-white/[0.04]">
-                          <span className={`inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-0.5 rounded-full ${s.tag}`}>
-                            <span className={`w-1.5 h-1.5 rounded-full ${s.dot}`} />
-                            {s.label}
-                          </span>
-                          <span className="text-[11px] text-slate-500 flex items-center gap-1">
-                            <Clock className="size-3" />
-                            {relativeTime}
-                          </span>
-                        </div>
-
-                        {/* Actions */}
-                        <div className="flex gap-2 pt-0.5">
-                          {report.status === "Resolved" ? (
-                            <div className="flex-1 flex items-center justify-center gap-1.5 py-1.5 text-xs font-medium text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 rounded-xl">
-                              <CheckCircle2 className="size-3.5" />
-                              Resolved
-                            </div>
-                          ) : (
-                            <button
-                              disabled={!session}
-                              title={!session ? "Login to earn Civic Points" : ""}
-                              className="flex-1 flex items-center justify-center gap-1.5 py-1.5 text-xs font-medium text-slate-300 bg-white/[0.03] border border-white/10 rounded-xl hover:bg-white/10 hover:text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                openVerifyDialog(report);
-                              }}
-                            >
-                              <CheckCircle2 className="size-3.5 text-slate-400" />
-                              Verify Fix
-                            </button>
-                          )}
-                          <a
-                            href={`https://www.google.com/maps/dir/?api=1&destination=${report.latitude},${report.longitude}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            onClick={(e) => e.stopPropagation()}
-                            className="flex-1 flex items-center justify-center gap-1.5 py-1.5 text-xs font-medium text-teal-300 bg-teal-500/10 border border-teal-500/20 rounded-xl hover:bg-teal-500/20 transition-colors"
+                      <TiltedCard
+                        containerHeight="auto"
+                        containerWidth="100%"
+                        imageHeight="auto"
+                        imageWidth="100%"
+                        scaleOnHover={1.02}
+                        rotateAmplitude={4}
+                        showMobileWarning={false}
+                        showTooltip={false}
+                        displayOverlayContent={true}
+                        className="w-full mb-3"
+                        overlayContent={
+                          <BorderGlow
+                            borderRadius={16}
+                            backgroundColor="#050505"
+                            glowColor={glowColor}
+                            colors={
+                              report.severity_score === 1
+                                ? ['#2dd4bf', '#14b8a6', '#0f766e']
+                                : report.severity_score === 2
+                                ? ['#f43f5e', '#e11d48', '#be123c']
+                                : ['#fbbf24', '#f59e0b', '#d97706']
+                            }
+                            edgeSensitivity={0}
+                            glowRadius={30}
+                            coneSpread={2}
+                            className="w-full h-full"
                           >
-                            <Navigation className="size-3.5" />
-                            Navigate
-                          </a>
-                        </div>
-                      </div>
+                            <div
+                              onClick={() => {
+                                setFocusedCoords({ lat: report.latitude, lng: report.longitude });
+                                setMobileView('map');
+                              }}
+                              className={`w-full h-full group relative rounded-2xl border transition-all duration-200 cursor-pointer p-3.5 flex flex-col gap-3 bg-[#0b0f19] ${
+                                isHighlighted
+                                  ? "border-teal-400 shadow-[0_0_25px_rgba(45,212,191,0.15)]"
+                                  : "border-slate-800/70 hover:border-slate-700 hover:bg-[#0f1422] shadow-sm"
+                              }`}
+                            >
+                              {/* Top content */}
+                              <div className="flex gap-3">
+                                {report.image_url ? (
+                                  /* eslint-disable-next-line @next/next/no-img-element */
+                                  <img
+                                    src={report.image_url}
+                                    className="w-14 h-14 rounded-xl object-cover flex-shrink-0 border border-white/5"
+                                    alt={report.title}
+                                  />
+                                ) : (
+                                  <div className="w-14 h-14 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-center flex-shrink-0">
+                                    <MapPin className="size-5 text-slate-600" />
+                                  </div>
+                                )}
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex items-start justify-between gap-1">
+                                    <p className="font-display font-semibold text-[13.5px] text-[#e8eaf0] leading-snug group-hover:text-teal-300 transition-colors line-clamp-1">
+                                      {report.title}
+                                    </p>
+                                    {session?.user?.id === report.user_id && (
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleDeleteReport(report.id);
+                                        }}
+                                        className="text-slate-500 hover:text-rose-400 transition-colors p-0.5"
+                                        title="Delete your report"
+                                      >
+                                        <Trash2 className="size-3.5" />
+                                      </button>
+                                    )}
+                                  </div>
+                                  <p className="text-xs text-slate-400 leading-relaxed line-clamp-2 mt-0.5">
+                                    {report.description}
+                                  </p>
+                                </div>
+                              </div>
+
+                              {/* Meta row */}
+                              <div className="flex items-center justify-between text-xs pt-1 border-t border-white/[0.04]">
+                                <span className={`inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-0.5 rounded-full ${s.tag}`}>
+                                  <span className={`w-1.5 h-1.5 rounded-full ${s.dot}`} />
+                                  {s.label}
+                                </span>
+                                <span className="text-[11px] text-slate-500 flex items-center gap-1">
+                                  <Clock className="size-3" />
+                                  {relativeTime}
+                                </span>
+                              </div>
+
+                              {/* Actions */}
+                              <div className="flex gap-2 pt-0.5">
+                                {report.status === "Resolved" ? (
+                                  <div className="flex-1 flex items-center justify-center gap-1.5 py-1.5 text-xs font-medium text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 rounded-xl">
+                                    <CheckCircle2 className="size-3.5" />
+                                    Resolved
+                                  </div>
+                                ) : (
+                                  <button
+                                    disabled={!session}
+                                    title={!session ? "Login to earn Civic Points" : ""}
+                                    className="flex-1 flex items-center justify-center gap-1.5 py-1.5 text-xs font-medium text-slate-300 bg-white/[0.03] border border-white/10 rounded-xl hover:bg-white/10 hover:text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      openVerifyDialog(report);
+                                    }}
+                                  >
+                                    <CheckCircle2 className="size-3.5 text-slate-400" />
+                                    Verify Fix
+                                  </button>
+                                )}
+                                <a
+                                  href={`https://www.google.com/maps/dir/?api=1&destination=${report.latitude},${report.longitude}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="flex-1 flex items-center justify-center gap-1.5 py-1.5 text-xs font-medium text-teal-300 bg-teal-500/10 border border-teal-500/20 rounded-xl hover:bg-teal-500/20 transition-colors"
+                                >
+                                  <Navigation className="size-3.5" />
+                                  Navigate
+                                </a>
+                              </div>
+                            </div>
+                          </BorderGlow>
+                        }
+                      />
                     </AnimatedItem>
                   );
             })
