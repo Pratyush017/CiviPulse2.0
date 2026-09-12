@@ -119,47 +119,59 @@ export async function POST(request: NextRequest) {
     } = supabase.storage.from("issue_images").getPublicUrl(fileName);
 
     // ---- 1st Stage: Local ONNX Routing ----
-    // Dynamic import — avoids bundling onnxruntime-node into this serverless
-    // function at build time (prevents Vercel cold-start crash).
-    const { routeSubmission } = await import("@/lib/hazard-router");
-    let parsed: ReportAnalysis;
-    const route = await routeSubmission(buffer);
+    // Dynamic import — onnxruntime-node is unavailable on Vercel (missing
+    // libonnxruntime.so.1). On failure, we silently escalate to Gemini.
+    let parsed!: ReportAnalysis;
+    let onnxHandled = false;
 
-    if (route.action === "reject") {
-      const storageFileName = publicUrl.split('/').pop();
-      if (storageFileName) {
-        await supabase.storage.from("issue_images").remove([storageFileName]);
+    try {
+      const { routeSubmission } = await import("@/lib/hazard-router");
+      const route = await routeSubmission(buffer);
+
+      if (route.action === "reject") {
+        const storageFileName = publicUrl.split('/').pop();
+        if (storageFileName) {
+          await supabase.storage.from("issue_images").remove([storageFileName]);
+        }
+        return NextResponse.json(
+          { error: route.reason || "AI Triage Rejected: Invalid civic issue." },
+          { status: 400 }
+        );
+      } else if (route.action === "accept") {
+        const { describeReport } = await import("@/lib/describe");
+        const generatedDesc = await describeReport({
+          label: route.label,
+          severity: route.severity,
+          latitude: lat,
+          longitude: lng,
+        });
+
+        const severityMapReverse: Record<number, "Low" | "Medium" | "Critical"> = {
+          1: "Low",
+          2: "Low",
+          3: "Medium",
+          4: "Medium",
+          5: "Critical",
+        };
+
+        parsed = {
+          isAuthentic: true,
+          fraudReason: null,
+          category: route.label,
+          title: `${route.label.replace(/_/g, ' ').toUpperCase()} Report`,
+          description: generatedDesc,
+          severity: severityMapReverse[route.severity] || "Medium",
+        };
+        onnxHandled = true;
       }
-      return NextResponse.json(
-        { error: route.reason || "AI Triage Rejected: Invalid civic issue." },
-        { status: 400 }
-      );
-    } else if (route.action === "accept") {
-      const { describeReport } = await import("@/lib/describe");
-      const generatedDesc = await describeReport({
-        label: route.label,
-        severity: route.severity,
-        latitude: lat,
-        longitude: lng,
-      });
+      // action === "escalate" falls through with onnxHandled = false
+    } catch (onnxError) {
+      // onnxruntime-node unavailable (e.g., Vercel: libonnxruntime.so.1 missing).
+      // Silently fall through to Gemini escalation.
+      console.warn("[ONNX Router] Native runtime unavailable, escalating to Gemini:", onnxError);
+    }
 
-      const severityMapReverse: Record<number, "Low" | "Medium" | "Critical"> = {
-        1: "Low",
-        2: "Low",
-        3: "Medium",
-        4: "Medium",
-        5: "Critical",
-      };
-
-      parsed = {
-        isAuthentic: true,
-        fraudReason: null,
-        category: route.label,
-        title: `${route.label.replace(/_/g, ' ').toUpperCase()} Report`,
-        description: generatedDesc,
-        severity: severityMapReverse[route.severity] || "Medium",
-      };
-    } else {
+    if (!onnxHandled) {
       // escalate branch -> fallback to Gemini
       const genAI = getGeminiClient();
       if (!genAI) {
