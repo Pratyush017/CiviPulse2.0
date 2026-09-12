@@ -188,144 +188,159 @@ export default function MarketingPage() {
   // ---------------------------------------------------------------------------
   // Smooth, Lightweight GSAP Pinning
   // ---------------------------------------------------------------------------
+  // Responsive GSAP Animations (Desktop: Pinned Scroll; Mobile: Auto-Timed Intro)
+  // ---------------------------------------------------------------------------
   useEffect(() => {
     const prefersReducedMotion = window.matchMedia(
       "(prefers-reduced-motion: reduce)"
     ).matches;
 
     const ctx = gsap.context(() => {
-      if (!prefersReducedMotion) {
-        // Hero Parallax
-        gsap.to(".hero-bg", {
-          yPercent: 30,
-          ease: "none",
-          scrollTrigger: {
-            trigger: "#hero",
-            start: "top top",
-            end: "bottom top",
-            scrub: true,
-          },
-        });
-
-        // --- INTRO SEQUENCE: Pin #hero, lift curtain, fade in content ---
-        gsap.set("#hero-content", { opacity: 0, scale: 0.96 });
-        gsap.set(".site-header", { opacity: 0, y: -20 });
-        gsap.set("#floating-logo", { top: "50%", left: "50%", xPercent: -50, yPercent: -50, scale: 1 });
-
-        const introTl = gsap.timeline({
-          scrollTrigger: {
-            trigger: "#hero",
-            start: "top top",
-            end: "+=800",
-            scrub: true,
-            pin: true,
-            pinSpacing: true,
-            invalidateOnRefresh: true,
-          }
-        });
-
-        // 0-60%: Curtain lifts up
-        introTl.to("#intro-curtain", {
-          yPercent: -100,
-          opacity: 0,
-          ease: "power2.inOut",
-        }, 0);
-
-        // Hide curtain and unmount/pause its WebGL context when offscreen
-        introTl.set("#intro-curtain", { display: "none" }, 0.65);
-
-        // 15-80%: Hero content fades in (slightly delayed behind curtain)
-        introTl.to("#hero-content", {
-          opacity: 1,
-          scale: 1,
-          ease: "power2.out",
-        }, 0.15);
-
-        // 30-80%: Header slides in
-        introTl.to(".site-header", {
-          opacity: 1,
-          y: 0,
-          ease: "power2.out",
-        }, 0.3);
-
-        // 0-100%: Logo shrinks into header corner
-        introTl.to("#floating-logo", {
-          top: () => {
-            const target = document.querySelector("#header-brand-target");
-            return target ? target.getBoundingClientRect().top + 2 : 18;
-          },
-          left: () => {
-            const target = document.querySelector("#header-brand-target");
-            return target ? target.getBoundingClientRect().left : 16;
-          },
-          xPercent: 0,
-          yPercent: 0,
-          scale: 0.333,
-          ease: "power2.inOut",
-        }, 0);
-
-
-
-        // CTA Card Pop
-        gsap.fromTo(
-          ".cta-card",
-          { opacity: 0, scale: 0.9, y: 60, filter: "blur(10px)" },
-          {
-            opacity: 1,
-            scale: 1,
-            y: 0,
-            filter: "blur(0px)",
-            duration: 1.5,
-            ease: "expo.out",
-            scrollTrigger: {
-              trigger: ".cta-section",
-              start: "top 80%",
-            },
-          }
-        );
-      }
-
       const mm = gsap.matchMedia();
 
+      // ═══════════════════════ DESKTOP (min-width: 768px) ═══════════════════════
       mm.add("(min-width: 768px)", () => {
-        if (!pinContainerRef.current || !pinSectionRef.current) return;
-
-        const totalCards = BENEFITS.length;
-        const cardElements = cardsRef.current.filter(Boolean) as HTMLDivElement[];
-        if (cardElements.length === 0) return;
-
-        cardElements.forEach((card, idx) => {
-          if (idx === 0) {
-            gsap.set(card, { autoAlpha: 1, yPercent: 0, scale: 1, filter: "blur(0px)", transformOrigin: "top center" });
-          } else {
-            gsap.set(card, {
-              autoAlpha: 0,
-              yPercent: prefersReducedMotion ? 0 : 50,
-              scale: 0.9,
-              filter: "blur(10px)",
-              transformOrigin: "top center"
-            });
-          }
-        });
-
-        const tl = gsap.timeline({
-          scrollTrigger: {
-            trigger: pinContainerRef.current,
-            start: "top top",
-            end: `+=${totalCards * 200}%`,
-            pin: pinSectionRef.current,
-            pinSpacing: true,
-            scrub: 1.5,
-            anticipatePin: 1,
-            onUpdate: (self) => {
-              const idx = Math.min(
-                totalCards - 1,
-                Math.max(0, Math.floor(self.progress * totalCards))
-              );
-              setActiveStepIndex(idx);
+        if (!prefersReducedMotion) {
+          // Hero Parallax
+          gsap.to(".hero-bg", {
+            yPercent: 30,
+            ease: "none",
+            scrollTrigger: {
+              trigger: "#hero",
+              start: "top top",
+              end: "bottom top",
+              scrub: true,
             },
-          },
-        });
+          });
+
+          // --- INTRO SEQUENCE: Pin #hero, lift curtain, fade in content ---
+          gsap.set("#hero-content", { opacity: 0, scale: 0.96 });
+          gsap.set(".site-header", { opacity: 0, y: -20 });
+          gsap.set("#floating-logo", { top: "50%", left: "50%", xPercent: -50, yPercent: -50, scale: 1 });
+
+          const introTl = gsap.timeline({
+            scrollTrigger: {
+              trigger: "#hero",
+              start: "top top",
+              end: "+=800",
+              scrub: true,
+              pin: true,
+              pinSpacing: true,
+              invalidateOnRefresh: true,
+            },
+          });
+
+          // 0-60%: Curtain lifts up
+          introTl.to("#intro-curtain", {
+            yPercent: -100,
+            opacity: 0,
+            ease: "power2.inOut",
+          }, 0);
+
+          // Hide curtain and unmount/pause its WebGL context when offscreen
+          introTl.set("#intro-curtain", { display: "none" }, 0.65);
+
+          // 15-80%: Hero content fades in
+          introTl.to("#hero-content", {
+            opacity: 1,
+            scale: 1,
+            ease: "power2.out",
+          }, 0.15);
+
+          // 30-80%: Header slides in
+          introTl.to(".site-header", {
+            opacity: 1,
+            y: 0,
+            ease: "power2.out",
+          }, 0.3);
+
+          // 0-100%: Logo shrinks into header corner
+          introTl.to("#floating-logo", {
+            top: () => {
+              const target = document.querySelector("#header-brand-target");
+              return target ? target.getBoundingClientRect().top + 2 : 18;
+            },
+            left: () => {
+              const target = document.querySelector("#header-brand-target");
+              return target ? target.getBoundingClientRect().left : 16;
+            },
+            xPercent: 0,
+            yPercent: 0,
+            scale: 0.333,
+            ease: "power2.inOut",
+          }, 0);
+        }
+
+        // Pinned Feature Cards
+        if (pinContainerRef.current && pinSectionRef.current) {
+          const totalCards = BENEFITS.length;
+          const cardElements = cardsRef.current.filter(Boolean) as HTMLDivElement[];
+          if (cardElements.length > 0) {
+            cardElements.forEach((card, idx) => {
+              if (idx === 0) {
+                gsap.set(card, { autoAlpha: 1, yPercent: 0, scale: 1, filter: "blur(0px)", transformOrigin: "top center" });
+              } else {
+                gsap.set(card, {
+                  autoAlpha: 0,
+                  yPercent: prefersReducedMotion ? 0 : 50,
+                  scale: 0.9,
+                  filter: "blur(10px)",
+                  transformOrigin: "top center",
+                });
+              }
+            });
+
+            const tl = gsap.timeline({
+              scrollTrigger: {
+                trigger: pinContainerRef.current,
+                start: "top top",
+                end: `+=${totalCards * 200}%`,
+                pin: pinSectionRef.current,
+                pinSpacing: true,
+                scrub: 1.5,
+                anticipatePin: 1,
+                onUpdate: (self) => {
+                  const idx = Math.min(
+                    totalCards - 1,
+                    Math.max(0, Math.floor(self.progress * totalCards))
+                  );
+                  setActiveStepIndex(idx);
+                },
+              },
+            });
+
+            for (let i = 0; i < totalCards - 1; i++) {
+              const current = cardElements[i];
+              const next = cardElements[i + 1];
+
+              tl.to(
+                current,
+                {
+                  autoAlpha: 0,
+                  yPercent: prefersReducedMotion ? 0 : -20,
+                  scale: 0.9,
+                  filter: "blur(10px)",
+                  duration: 1,
+                  ease: "power3.inOut",
+                },
+                `step-${i}`
+              );
+
+              tl.to(
+                next,
+                {
+                  autoAlpha: 1,
+                  yPercent: 0,
+                  scale: 1,
+                  filter: "blur(0px)",
+                  duration: 1,
+                  ease: "power3.inOut",
+                },
+                `step-${i}`
+              );
+            }
+          }
+        }
 
         // ═══════════════════════ IMPACT HORIZONTAL SCROLL (DESKTOP) ═══════════════════════
         const impactSection = document.querySelector("#impact");
@@ -337,52 +352,94 @@ export default function MarketingPage() {
             ease: "none",
             scrollTrigger: {
               trigger: impactSection,
-              start: "center center", // Perfectly center the section vertically on the screen before pinning
+              start: "center center",
               end: () => `+=${impactContainer.scrollWidth}`,
               pin: true,
               scrub: 1,
               anticipatePin: 1,
               invalidateOnRefresh: true,
-            }
+            },
           });
         }
-
-        for (let i = 0; i < totalCards - 1; i++) {
-          const current = cardElements[i];
-          const next = cardElements[i + 1];
-
-          tl.to(
-            current,
-            {
-              autoAlpha: 0,
-              yPercent: prefersReducedMotion ? 0 : -20,
-              scale: 0.9,
-              filter: "blur(10px)",
-              duration: 1,
-              ease: "power3.inOut",
-            },
-            `step-${i}`
-          );
-
-          tl.to(
-            next,
-            {
-              autoAlpha: 1,
-              yPercent: 0,
-              scale: 1,
-              filter: "blur(0px)",
-              duration: 1,
-              ease: "power3.inOut",
-            },
-            `step-${i}`
-          );
-        }
       });
 
+      // ═══════════════════════ MOBILE (max-width: 767px) ═══════════════════════
       mm.add("(max-width: 767px)", () => {
+        // Reset feature cards and impact track for native touch scroll
         const cardElements = cardsRef.current.filter(Boolean) as HTMLDivElement[];
         gsap.set(cardElements, { clearProps: "all", visibility: "visible", opacity: 1 });
+        gsap.set("#impact-cards-container", { clearProps: "all" });
+
+        if (prefersReducedMotion) {
+          gsap.set("#hero-content", { opacity: 1, scale: 1 });
+          gsap.set(".site-header", { opacity: 1, y: 0 });
+          gsap.set("#intro-curtain", { display: "none" });
+          gsap.set("#floating-logo", { display: "none" });
+          return;
+        }
+
+        // Auto-playing timed intro sequence on mobile (no scroll hijacking!)
+        gsap.set("#hero-content", { opacity: 0, scale: 0.96 });
+        gsap.set(".site-header", { opacity: 0, y: -20 });
+        gsap.set("#floating-logo", { top: "50%", left: "50%", xPercent: -50, yPercent: -50, scale: 1 });
+        gsap.set("#intro-curtain", { yPercent: 0, opacity: 1, display: "flex" });
+
+        const mobileIntroTl = gsap.timeline({ delay: 0.6 });
+
+        mobileIntroTl
+          .to("#intro-curtain", {
+            yPercent: -100,
+            opacity: 0,
+            duration: 0.85,
+            ease: "power2.inOut",
+          }, 0)
+          .to("#hero-content", {
+            opacity: 1,
+            scale: 1,
+            duration: 0.75,
+            ease: "power2.out",
+          }, 0.15)
+          .to(".site-header", {
+            opacity: 1,
+            y: 0,
+            duration: 0.65,
+            ease: "power2.out",
+          }, 0.25)
+          .to("#floating-logo", {
+            top: () => {
+              const target = document.querySelector("#header-brand-target");
+              return target ? target.getBoundingClientRect().top + 2 : 18;
+            },
+            left: () => {
+              const target = document.querySelector("#header-brand-target");
+              return target ? target.getBoundingClientRect().left : 16;
+            },
+            xPercent: 0,
+            yPercent: 0,
+            scale: 0.333,
+            duration: 0.85,
+            ease: "power2.inOut",
+          }, 0.05)
+          .set("#intro-curtain", { display: "none" });
       });
+
+      // CTA Card Pop (both desktop & mobile)
+      gsap.fromTo(
+        ".cta-card",
+        { opacity: 0, scale: 0.9, y: 60, filter: "blur(10px)" },
+        {
+          opacity: 1,
+          scale: 1,
+          y: 0,
+          filter: "blur(0px)",
+          duration: 1.5,
+          ease: "expo.out",
+          scrollTrigger: {
+            trigger: ".cta-section",
+            start: "top 80%",
+          },
+        }
+      );
     });
 
     return () => {
