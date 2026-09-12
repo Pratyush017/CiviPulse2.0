@@ -459,7 +459,7 @@ export default function MarketingPage() {
           <LaserFlow
             color="#a78bfa"
             horizontalBeamOffset={0}
-            verticalBeamOffset={-0.4}
+            verticalBeamOffset={-0.49}
             horizontalSizing={1.5}
             verticalSizing={3.2}
             wispDensity={1.2}
@@ -870,7 +870,7 @@ export default function MarketingPage() {
           <LaserFlow 
             color="#cf9eff" 
             horizontalBeamOffset={0}
-            verticalBeamOffset={-0.4}
+            verticalBeamOffset={-0.49}
             horizontalSizing={1.8}
             verticalSizing={3.8}
             wispDensity={2.0}
