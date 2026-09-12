@@ -190,7 +190,17 @@ export default function DashboardPage() {
   const [mobileView, setMobileView] = useState<'feed' | 'map'>('feed');
   const [headerScale, setHeaderScale] = useState(0.28);
 
-  // --- Offline Sync Engine (must come after all useState declarations) ---
+  useEffect(() => {
+    // Sequence the dashboard intro
+    const t1 = setTimeout(() => setShowIntroOverlay(false), 2000);
+    const t2 = setTimeout(() => setShowIntro(false), 2800);
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+    };
+  }, []);
+
+  // --- Offline Sync Engine ---
   const { isSyncing, pendingCount } = useBackgroundSync(
     setReports as (updater: (prev: unknown[]) => unknown[]) => void,
     setToast as (toast: { message: string; type: "success" | "error" | "info" }) => void
@@ -201,17 +211,6 @@ export default function DashboardPage() {
     handleResize();
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
-  }, []);
-
-  useEffect(() => {
-    // 1. Fade out the laser overlay first
-    const timer1 = setTimeout(() => setShowIntroOverlay(false), 6000);
-    // 2. Then shrink the logo and fade in the dashboard
-    const timer2 = setTimeout(() => setShowIntro(false), 6800);
-    return () => {
-      clearTimeout(timer1);
-      clearTimeout(timer2);
-    };
   }, []);
 
   useEffect(() => {
@@ -753,10 +752,10 @@ export default function DashboardPage() {
       )}
 
       <motion.main 
-        className="flex h-screen flex-col overflow-hidden bg-black text-slate-100"
-        initial={{ opacity: 0, y: 100 }}
-        animate={!showIntro ? { opacity: 1, y: 0 } : { opacity: 0, y: 100 }}
-        transition={{ duration: 1, ease: "easeOut" }}
+        className="flex h-screen flex-col overflow-hidden bg-black text-slate-100 transform-gpu"
+        initial={{ opacity: 0, scale: 0.85, filter: "blur(12px)" }}
+        animate={!showIntro ? { opacity: 1, scale: 1, filter: "blur(0px)" } : { opacity: 0, scale: 0.85, filter: "blur(12px)" }}
+        transition={{ duration: 1.2, ease: [0.76, 0, 0.24, 1] }}
       >
         {/* ═══════════════════════ HEADER ═══════════════════════ */}
         <header className="relative z-20 flex items-center justify-between border-b border-[#111111] bg-[#050505] px-6 py-3">
@@ -1162,126 +1161,103 @@ export default function DashboardPage() {
                                       : false;
 
                   return (
-                    <AnimatedItem key={report.id} index={index} delay={index * 0.05}>
-                      <TiltedCard
-                        className="w-full"
-                      imageSrc=""
-                      containerHeight="auto"
-                      containerWidth="100%"
-                      imageHeight="auto"
-                      imageWidth="100%"
-                      rotateAmplitude={5}
-                      scaleOnHover={1.02}
-                      showMobileWarning={false}
-                      showTooltip={false}
-                      displayOverlayContent={true}
-                      overlayContent={
-                        <BorderGlow
-                          borderRadius={20}
-                          backgroundColor="#0a0a0a"
-                          glowColor={glowColor}
-                          edgeSensitivity={isHighlighted ? 100 : 0}
-                          glowRadius={70}
-                          glowIntensity={isHighlighted ? 6.0 : 1.5}
-                          coneSpread={isHighlighted ? 25 : 3}
-                          colors={[starColor, starColor, starColor]}
-                          className="w-full h-full"
-                          animated={isHighlighted}
-                          loopAnimation={isHighlighted}
-                          animationSpeedMultiplier={isHighlighted ? 3 : 1}
-                        >
-                          <StarBorder
-                            as="div"
-                            color={starColor}
-                            className="w-full h-full"
-                            innerClassName={`bg-[#0a0a0a] rounded-[20px] overflow-hidden hover:bg-[#111111] transition-colors cursor-pointer flex flex-col w-full h-full`}
-                            onClick={() => {
-                              setFocusedCoords({ lat: report.latitude, lng: report.longitude });
-                              setMobileView('map');
-                            }}
-                          >
-                            {/* Top content */}
-                      <div className="flex gap-3 p-3.5 pb-0">
-                        {report.image_url ? (
-                          /* eslint-disable-next-line @next/next/no-img-element */
-                          <img src={report.image_url} className="w-14 h-14 rounded-lg object-cover flex-shrink-0 grayscale-[30%]" alt={report.title} />
-                        ) : (
-                          <div className="w-14 h-14 rounded-lg bg-[#111111] flex-shrink-0" />
-                        )}
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-start justify-between">
-                            <p className="font-display font-semibold text-[13.5px] text-[#e8eaf0] leading-snug mb-1 line-clamp-1">
-                              {report.title}
+                    <AnimatedItem key={report.id} index={index} delay={Math.min(index * 0.03, 0.3)}>
+                      <div
+                        onClick={() => {
+                          setFocusedCoords({ lat: report.latitude, lng: report.longitude });
+                          setMobileView('map');
+                        }}
+                        className={`group relative rounded-2xl border transition-all duration-200 cursor-pointer p-3.5 flex flex-col gap-3 ${
+                          isHighlighted
+                            ? "bg-teal-500/10 border-teal-400 shadow-[0_0_25px_rgba(45,212,191,0.15)]"
+                            : "bg-[#0b0f19] border-slate-800/70 hover:border-slate-700 hover:bg-[#0f1422] shadow-sm"
+                        }`}
+                      >
+                        {/* Top content */}
+                        <div className="flex gap-3">
+                          {report.image_url ? (
+                            /* eslint-disable-next-line @next/next/no-img-element */
+                            <img
+                              src={report.image_url}
+                              className="w-14 h-14 rounded-xl object-cover flex-shrink-0 border border-white/5"
+                              alt={report.title}
+                            />
+                          ) : (
+                            <div className="w-14 h-14 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-center flex-shrink-0">
+                              <MapPin className="size-5 text-slate-600" />
+                            </div>
+                          )}
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-start justify-between gap-1">
+                              <p className="font-display font-semibold text-[13.5px] text-[#e8eaf0] leading-snug group-hover:text-teal-300 transition-colors line-clamp-1">
+                                {report.title}
+                              </p>
+                              {session?.user?.id === report.user_id && (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleDeleteReport(report.id);
+                                  }}
+                                  className="text-slate-500 hover:text-rose-400 transition-colors p-0.5"
+                                  title="Delete your report"
+                                >
+                                  <Trash2 className="size-3.5" />
+                                </button>
+                              )}
+                            </div>
+                            <p className="text-xs text-slate-400 leading-relaxed line-clamp-2 mt-0.5">
+                              {report.description}
                             </p>
-                            {session?.user?.id === report.user_id && (
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleDeleteReport(report.id);
-                                }}
-                                className="ml-2 flex-shrink-0 text-[#7a8199] hover:text-rose-400 transition-colors"
-                                title="Delete your report"
-                              >
-                                <Trash2 className="size-3.5" />
-                              </button>
-                            )}
                           </div>
-                          <p className="text-xs text-[#7a8199] leading-relaxed line-clamp-2">
-                            {report.description}
-                          </p>
+                        </div>
+
+                        {/* Meta row */}
+                        <div className="flex items-center justify-between text-xs pt-1 border-t border-white/[0.04]">
+                          <span className={`inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-0.5 rounded-full ${s.tag}`}>
+                            <span className={`w-1.5 h-1.5 rounded-full ${s.dot}`} />
+                            {s.label}
+                          </span>
+                          <span className="text-[11px] text-slate-500 flex items-center gap-1">
+                            <Clock className="size-3" />
+                            {relativeTime}
+                          </span>
+                        </div>
+
+                        {/* Actions */}
+                        <div className="flex gap-2 pt-0.5">
+                          {report.status === "Resolved" ? (
+                            <div className="flex-1 flex items-center justify-center gap-1.5 py-1.5 text-xs font-medium text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 rounded-xl">
+                              <CheckCircle2 className="size-3.5" />
+                              Resolved
+                            </div>
+                          ) : (
+                            <button
+                              disabled={!session}
+                              title={!session ? "Login to earn Civic Points" : ""}
+                              className="flex-1 flex items-center justify-center gap-1.5 py-1.5 text-xs font-medium text-slate-300 bg-white/[0.03] border border-white/10 rounded-xl hover:bg-white/10 hover:text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                openVerifyDialog(report);
+                              }}
+                            >
+                              <CheckCircle2 className="size-3.5 text-slate-400" />
+                              Verify Fix
+                            </button>
+                          )}
+                          <a
+                            href={`https://www.google.com/maps/dir/?api=1&destination=${report.latitude},${report.longitude}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={(e) => e.stopPropagation()}
+                            className="flex-1 flex items-center justify-center gap-1.5 py-1.5 text-xs font-medium text-teal-300 bg-teal-500/10 border border-teal-500/20 rounded-xl hover:bg-teal-500/20 transition-colors"
+                          >
+                            <Navigation className="size-3.5" />
+                            Navigate
+                          </a>
                         </div>
                       </div>
-
-                      {/* Meta row */}
-                      <div className="flex items-center gap-2 px-3.5 py-2 mt-1">
-                        <span className={`flex items-center gap-1.5 text-[11px] font-semibold px-2 py-0.5 rounded-md ${s.tag}`}>
-                          <span className={`w-1 h-1 rounded-full ${s.dot}`} />
-                          {s.label}
-                        </span>
-                        <span className="ml-auto text-[11px] text-[#4a5068] flex items-center gap-1">
-                          <Clock className="size-3" />
-                          {relativeTime}
-                        </span>
-                      </div>
-
-                      {/* Actions */}
-                      <div className="flex gap-2 px-3.5 pb-3.5">
-                        {report.status === "Resolved" ? (
-                          <div className="flex-1 flex items-center justify-center gap-1.5 py-1.5 text-xs font-medium text-[#7a8199] border border-white/10 rounded-lg cursor-default bg-white/5">
-                            <CheckCircle2 className="size-3.5" />
-                            Resolved
-                          </div>
-                        ) : (
-                          <button
-                            disabled={!session}
-                            title={!session ? "Login to earn Civic Points" : ""}
-                            className="flex-1 flex items-center justify-center gap-1.5 py-1.5 text-xs font-medium text-[#7a8199] border border-white/10 rounded-lg hover:bg-white/5 hover:text-[#e8eaf0] transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-transparent"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              openVerifyDialog(report);
-                            }}
-                          >
-                            <CheckCircle2 className="size-3.5" />
-                            Verify Fix
-                          </button>
-                        )}
-                        <a
-                          href={`https://www.google.com/maps/dir/?api=1&destination=${report.latitude},${report.longitude}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          onClick={(e) => e.stopPropagation()}
-                          className="flex-1 flex items-center justify-center gap-1.5 py-1.5 text-xs font-medium text-teal-400 bg-teal-500/12 border border-teal-500/25 rounded-lg hover:bg-teal-500/20 transition-colors"
-                        >
-                          <Navigation className="size-3.5" />
-                          Navigate
-                        </a>
-                      </div>
-                      </StarBorder>
-                    </BorderGlow>
-                  }
-                />
-              </AnimatedItem>
-              );
+                    </AnimatedItem>
+                  );
             })
               )}
             </div>
