@@ -32,7 +32,7 @@ import BorderGlow from "@/components/ui/BorderGlow";
 import BlurText from "@/components/ui/BlurText";
 import RotatingText from "@/components/ui/RotatingText";
 import StarBorder from "@/components/ui/StarBorder";
-import GradualBlur from "@/components/ui/GradualBlur";
+import GlassSurface from "@/components/ui/GlassSurface";
 
 
 if (typeof window !== "undefined") {
@@ -451,15 +451,28 @@ export default function MarketingPage() {
   return (
     <div id="landing-root" className="min-h-screen bg-[#050505] text-slate-100 font-sans selection:bg-teal-500/30 selection:text-teal-200 overflow-x-hidden">
       {/* ═══════════════════════ HEADER ═══════════════════════ */}
-      <header className="site-header fixed top-0 left-0 right-0 z-50 border-b border-white/[0.06] bg-black/85 backdrop-blur-xl transition-all duration-300">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+      <header className="site-header fixed top-0 left-0 right-0 z-50 transition-all duration-300 px-3 sm:px-6 lg:px-8 pt-2.5 sm:pt-3.5 pointer-events-none">
+        <GlassSurface
+          borderRadius={50}
+          blur={24}
+          displace={0.4}
+          distortionScale={-140}
+          redOffset={0}
+          greenOffset={8}
+          blueOffset={16}
+          brightness={35}
+          opacity={0.92}
+          backgroundColor="rgba(8, 10, 16, 0.72)"
+          borderColor="rgba(255, 255, 255, 0.12)"
+          className="max-w-6xl mx-auto h-14 sm:h-16 px-4 sm:px-6 shadow-2xl pointer-events-auto"
+        >
           {/* Brand Logo Placeholder (preserves space for floating logo) */}
           <div id="header-brand-target" className="flex items-center w-[140px] opacity-0 pointer-events-none">
             <span className="font-display font-bold text-xl">CivicPulse</span>
           </div>
 
           {/* Calming Pill Navigation */}
-          <nav className="hidden md:flex items-center gap-1 bg-[#111111] border border-white/[0.08] rounded-full p-1 shadow-md">
+          <nav className="hidden md:flex items-center gap-1 bg-white/[0.04] border border-white/[0.08] rounded-full p-1 shadow-inner">
             {NAV_ITEMS.map((item, idx) => {
               const isActive = activeNavIndex === idx;
 
@@ -506,7 +519,7 @@ export default function MarketingPage() {
               <ArrowRight className="size-3.5" />
             </Link>
           </div>
-        </div>
+        </GlassSurface>
       </header>
 
       {/* ═══════════════════════ 1. HERO SECTION ═══════════════════════ */}
