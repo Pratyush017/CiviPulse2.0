@@ -247,10 +247,13 @@ export default function MarketingPage() {
 
         // 0-100%: Logo shrinks into header corner
         introTl.to("#floating-logo", {
-          top: "16px",
+          top: () => {
+            const target = document.querySelector("#header-brand-target");
+            return target ? target.getBoundingClientRect().top + 2 : 18;
+          },
           left: () => {
-            const container = document.querySelector(".max-w-6xl");
-            return container ? container.getBoundingClientRect().left + 16 : 16;
+            const target = document.querySelector("#header-brand-target");
+            return target ? target.getBoundingClientRect().left : 16;
           },
           xPercent: 0,
           yPercent: 0,
@@ -391,10 +394,7 @@ export default function MarketingPage() {
       <header className="site-header fixed top-0 left-0 right-0 z-50 border-b border-white/[0.06] bg-black/85 backdrop-blur-xl transition-all duration-300">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           {/* Brand Logo Placeholder (preserves space for floating logo) */}
-          <div className="flex items-center gap-2.5 w-[140px] opacity-0 pointer-events-none">
-            <div className="size-8 rounded-xl bg-teal-400 flex items-center justify-center">
-              <Activity className="size-4" />
-            </div>
+          <div id="header-brand-target" className="flex items-center w-[140px] opacity-0 pointer-events-none">
             <span className="font-display font-bold text-xl">CivicPulse</span>
           </div>
 
@@ -866,23 +866,21 @@ export default function MarketingPage() {
         id="intro-curtain"
         className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-[#050505] pointer-events-none"
       >
-        <div className="absolute inset-0 opacity-60">
+        <div className="absolute inset-0 opacity-40">
           <LaserFlow 
-            color="#cf9eff" 
-            horizontalBeamOffset={-0.02}
-            verticalBeamOffset={-0.45}
-            horizontalSizing={2}
-            verticalSizing={4.4}
-            wispDensity={2.1}
-            wispSpeed={27}
-            wispIntensity={20}
-            flowSpeed={0.43}
-            flowStrength={0.76}
-            fogIntensity={1}
+            color="#a78bfa" 
+            horizontalBeamOffset={0}
+            verticalBeamOffset={-0.4}
+            horizontalSizing={1.5}
+            verticalSizing={3.2}
+            wispDensity={1.2}
+            wispSpeed={18}
+            wispIntensity={14}
+            flowSpeed={0.25}
+            flowStrength={0.5}
+            fogIntensity={0.8}
             fogScale={0.1}
-            fogFallSpeed={0.26}
             decay={3}
-            falloffStart={2.01}
           />
         </div>
       </div>
@@ -892,10 +890,7 @@ export default function MarketingPage() {
         id="floating-logo" 
         className="fixed z-[200] flex items-center origin-top-left pointer-events-none whitespace-nowrap"
       >
-        <div className="size-24 rounded-3xl bg-teal-400 flex items-center justify-center shadow-[0_0_40px_rgba(45,212,191,0.3)] mr-7">
-          <Activity className="size-12 text-[#07090e]" strokeWidth={3} />
-        </div>
-        <div className="flex items-center font-display font-bold tracking-tight leading-none text-6xl">
+        <div className="flex items-center font-display font-bold tracking-tight leading-none text-5xl sm:text-6xl">
           <BlurText text="Civic" delay={250} animateBy="letters" direction="top" className="text-white mt-1.5" />
           
           <RotatingText
