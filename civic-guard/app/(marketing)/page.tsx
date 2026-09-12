@@ -455,16 +455,16 @@ export default function MarketingPage() {
       <header className="site-header fixed top-0 left-0 right-0 z-50 transition-all duration-300 px-3 sm:px-6 lg:px-8 pt-2.5 sm:pt-3.5 pointer-events-none">
         <GlassSurface
           borderRadius={50}
-          blur={24}
-          displace={0.4}
-          distortionScale={-140}
+          blur={48}
+          displace={0.8}
+          distortionScale={-100}
           redOffset={0}
           greenOffset={8}
           blueOffset={16}
-          brightness={35}
-          opacity={0.92}
-          backgroundColor="rgba(8, 10, 16, 0.72)"
-          borderColor="rgba(255, 255, 255, 0.12)"
+          brightness={60}
+          opacity={0.80}
+          backgroundColor="rgba(20, 24, 32, 0.60)"
+          borderColor="rgba(255, 255, 255, 0.25)"
           className="max-w-6xl mx-auto h-14 sm:h-16 px-4 sm:px-6 shadow-2xl pointer-events-auto"
         >
           {/* Brand Logo Placeholder (preserves space for floating logo) */}
@@ -869,48 +869,6 @@ export default function MarketingPage() {
         </div>
       </section>
 
-      {/* ═══════════════════════ INTERACTIVE LIQUID ETHER (DESKTOP ONLY) ═══════════════════════ */}
-      <section className="hidden md:block relative py-16 bg-black border-t border-white/[0.06] overflow-hidden">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 mb-8 flex items-end justify-between">
-          <div>
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 text-xs font-semibold mb-3">
-              <Sparkles className="size-3.5" />
-              <span>Interactive Pulse Field</span>
-            </div>
-            <h2 className="font-display font-bold text-3xl sm:text-4xl text-white tracking-tight">
-              Fluid Civic Energy & Activity
-            </h2>
-          </div>
-          <p className="text-xs text-slate-400 max-w-xs text-right leading-relaxed">
-            Move your cursor across the fluid field to interact with dynamic real-time urban pulse ripples.
-          </p>
-        </div>
-
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="rounded-3xl border border-white/[0.08] bg-[#070913] overflow-hidden shadow-2xl" style={{ width: '100%', height: 600, position: 'relative' }}>
-            <LiquidEther
-              colors={[ '#5227FF', '#FF9FFC', '#B497CF' ]}
-              mouseForce={20}
-              cursorSize={100}
-              isViscous
-              viscous={30}
-              iterationsViscous={32}
-              iterationsPoisson={32}
-              resolution={0.5}
-              isBounce={false}
-              autoDemo
-              autoSpeed={0.5}
-              autoIntensity={2.2}
-              takeoverDuration={0.25}
-              autoResumeDelay={3000}
-              autoRampDuration={0.6}
-              color0="#5227FF"
-              color1="#FF9FFC"
-              color2="#B497CF"
-            />
-          </div>
-        </div>
-      </section>
 
       {/* ═══════════════════════ 4. GET STARTED CTA SECTION ═══════════════════════ */}
       <section className="cta-section relative py-20 bg-black overflow-hidden border-t border-white/[0.06]">

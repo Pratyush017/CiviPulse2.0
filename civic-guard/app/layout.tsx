@@ -18,7 +18,7 @@ export const metadata: Metadata = {
     "Report and track civic issues in your community. AI-powered classification and severity analysis.",
 };
 
-import ClickSpark from "@/components/ui/ClickSpark";
+import LiquidEther from "@/components/ui/LiquidEther";
 
 export default function RootLayout({
   children,
@@ -32,7 +32,25 @@ export default function RootLayout({
     >
       <body className="min-h-full flex flex-col">
         {children}
-        <ClickSpark sparkColor="#2dd4bf" sparkCount={10} />
+        <div className="fixed inset-0 z-[9999] pointer-events-none mix-blend-screen">
+          <LiquidEther
+            colors={['#5227FF', '#FF9FFC', '#B497CF']}
+            mouseForce={20}
+            cursorSize={100}
+            isViscous={false}
+            viscous={30}
+            iterationsViscous={32}
+            iterationsPoisson={52}
+            resolution={0.5}
+            isBounce={false}
+            autoDemo={true}
+            autoSpeed={0.5}
+            autoIntensity={3.9}
+            takeoverDuration={0.25}
+            autoResumeDelay={3000}
+            autoRampDuration={0.6}
+          />
+        </div>
       </body>
     </html>
   );
