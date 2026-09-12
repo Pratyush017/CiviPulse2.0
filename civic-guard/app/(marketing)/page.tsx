@@ -866,21 +866,22 @@ export default function MarketingPage() {
         id="intro-curtain"
         className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-[#050505] pointer-events-none"
       >
-        <div className="absolute inset-0 opacity-40">
+        <div className="absolute inset-0">
           <LaserFlow 
-            color="#a78bfa" 
+            color="#cf9eff" 
             horizontalBeamOffset={0}
             verticalBeamOffset={-0.4}
-            horizontalSizing={1.5}
-            verticalSizing={3.2}
-            wispDensity={1.2}
-            wispSpeed={18}
-            wispIntensity={14}
-            flowSpeed={0.25}
-            flowStrength={0.5}
-            fogIntensity={0.8}
-            fogScale={0.1}
-            decay={3}
+            horizontalSizing={1.8}
+            verticalSizing={3.8}
+            wispDensity={2.0}
+            wispSpeed={24}
+            wispIntensity={22}
+            flowSpeed={0.38}
+            flowStrength={0.7}
+            fogIntensity={1.0}
+            fogScale={0.12}
+            decay={2.8}
+            falloffStart={1.8}
           />
         </div>
       </div>
