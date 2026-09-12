@@ -649,7 +649,7 @@ export default function MarketingPage() {
       >
         <div
           ref={pinSectionRef}
-          className="relative min-h-screen w-full flex flex-col justify-center px-4 sm:px-6 lg:px-8 pt-20 pb-16 md:pt-24 md:pb-12 overflow-hidden"
+          className="relative w-full flex flex-col justify-center px-4 sm:px-6 lg:px-8 py-16 md:py-24 md:min-h-screen overflow-hidden"
         >
           {/* Section Heading */}
           <div className="max-w-4xl mx-auto w-full mb-8 flex flex-col md:flex-row md:items-end justify-between gap-3 border-b border-white/[0.08] pb-4">
@@ -680,8 +680,8 @@ export default function MarketingPage() {
             </div>
           </div>
 
-          {/* Benefit Cards Container */}
-          <div className="relative max-w-4xl mx-auto w-full min-h-[400px] flex items-center justify-center">
+          {/* Benefit Cards Container: Vertical Stack on Mobile, Layered Pinned Stack on Desktop */}
+          <div className="relative max-w-4xl mx-auto w-full md:min-h-[420px] flex flex-col gap-6 md:gap-0 md:block">
             {BENEFITS.map((benefit, index) => {
               const IconComponent = benefit.icon;
 
@@ -693,7 +693,7 @@ export default function MarketingPage() {
                   }}
                   className={`w-full ${
                     index === 0 ? "relative" : "md:absolute md:inset-0"
-                  } mb-6 md:mb-0`}
+                  }`}
                   style={{ willChange: "transform, opacity" }}
                 >
                   <div className="bg-[#0a0a0a] border border-slate-800/90 rounded-3xl p-6 sm:p-8 md:p-10 shadow-xl relative overflow-hidden">
