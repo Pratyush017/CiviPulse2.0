@@ -3,8 +3,6 @@ import { Type } from "@google/genai";
 import { z } from "zod";
 import { createClient } from "@/utils/supabase/server";
 import { getGeminiClient, withGeminiRetry, parseGeminiError } from "@/lib/gemini";
-import { routeSubmission } from "@/lib/hazard-router";
-import { describeReport } from "@/lib/describe";
 
 export const runtime = "nodejs";
 
@@ -121,6 +119,9 @@ export async function POST(request: NextRequest) {
     } = supabase.storage.from("issue_images").getPublicUrl(fileName);
 
     // ---- 1st Stage: Local ONNX Routing ----
+    // Dynamic import — avoids bundling onnxruntime-node into this serverless
+    // function at build time (prevents Vercel cold-start crash).
+    const { routeSubmission } = await import("@/lib/hazard-router");
     let parsed: ReportAnalysis;
     const route = await routeSubmission(buffer);
 
@@ -134,6 +135,7 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     } else if (route.action === "accept") {
+      const { describeReport } = await import("@/lib/describe");
       const generatedDesc = await describeReport({
         label: route.label,
         severity: route.severity,
