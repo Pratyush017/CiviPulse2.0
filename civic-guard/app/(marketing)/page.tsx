@@ -29,10 +29,11 @@ import {
 
 import LaserFlow from "@/components/ui/LaserFlow";
 import BorderGlow from "@/components/ui/BorderGlow";
+import BlurText from "@/components/ui/BlurText";
+import RotatingText from "@/components/ui/RotatingText";
 import StarBorder from "@/components/ui/StarBorder";
 import GradualBlur from "@/components/ui/GradualBlur";
-import RotatingText from "@/components/ui/RotatingText";
-import BlurText from "@/components/ui/BlurText";
+
 
 if (typeof window !== "undefined") {
   gsap.registerPlugin(ScrollTrigger);
@@ -206,6 +207,57 @@ export default function MarketingPage() {
           },
         });
 
+        // --- INTRO SEQUENCE: Pin #hero, lift curtain, fade in content ---
+        gsap.set("#hero-content", { opacity: 0, scale: 0.96 });
+        gsap.set(".site-header", { opacity: 0, y: -20 });
+        gsap.set("#floating-logo", { top: "50%", left: "50%", xPercent: -50, yPercent: -50, scale: 1 });
+
+        const introTl = gsap.timeline({
+          scrollTrigger: {
+            trigger: "#hero",
+            start: "top top",
+            end: "+=800",
+            scrub: true,
+            pin: true,
+            pinSpacing: true,
+            invalidateOnRefresh: true,
+          }
+        });
+
+        // 0-60%: Curtain lifts up
+        introTl.to("#intro-curtain", {
+          yPercent: -100,
+          opacity: 0,
+          ease: "power2.inOut",
+        }, 0);
+
+        // 15-80%: Hero content fades in (slightly delayed behind curtain)
+        introTl.to("#hero-content", {
+          opacity: 1,
+          scale: 1,
+          ease: "power2.out",
+        }, 0.15);
+
+        // 30-80%: Header slides in
+        introTl.to(".site-header", {
+          opacity: 1,
+          y: 0,
+          ease: "power2.out",
+        }, 0.3);
+
+        // 0-100%: Logo shrinks into header corner
+        introTl.to("#floating-logo", {
+          top: "16px",
+          left: () => {
+            const container = document.querySelector(".max-w-6xl");
+            return container ? container.getBoundingClientRect().left + 16 : 16;
+          },
+          xPercent: 0,
+          yPercent: 0,
+          scale: 0.333,
+          ease: "power2.inOut",
+        }, 0);
+
 
 
         // CTA Card Pop
@@ -336,22 +388,15 @@ export default function MarketingPage() {
   return (
     <div id="landing-root" className="min-h-screen bg-[#050505] text-slate-100 font-sans selection:bg-teal-500/30 selection:text-teal-200 overflow-x-hidden">
       {/* ═══════════════════════ HEADER ═══════════════════════ */}
-      <header className="fixed top-0 left-0 right-0 z-50 border-b border-white/[0.06] bg-black/85 backdrop-blur-xl transition-all duration-300">
+      <header className="site-header fixed top-0 left-0 right-0 z-50 border-b border-white/[0.06] bg-black/85 backdrop-blur-xl transition-all duration-300">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-          {/* Brand Logo */}
-          <Link href="/" className="flex items-center gap-2.5 group">
-            <div className="size-8 rounded-xl bg-teal-400 flex items-center justify-center shadow-[0_0_15px_rgba(45,212,191,0.3)] transition-transform group-hover:scale-105">
-              <Activity className="size-4 text-[#07090e]" strokeWidth={2.5} />
+          {/* Brand Logo Placeholder (preserves space for floating logo) */}
+          <div className="flex items-center gap-2.5 w-[140px] opacity-0 pointer-events-none">
+            <div className="size-8 rounded-xl bg-teal-400 flex items-center justify-center">
+              <Activity className="size-4" />
             </div>
-            <div className="flex items-center">
-              <span className="font-display font-bold text-xl tracking-tight text-white">
-                Civic
-              </span>
-              <span className="ml-1 bg-cyan-400/90 text-black font-display font-bold text-sm px-2 py-0.5 rounded-md leading-tight">
-                Pulse
-              </span>
-            </div>
-          </Link>
+            <span className="font-display font-bold text-xl">CivicPulse</span>
+          </div>
 
           {/* Calming Pill Navigation */}
           <nav className="hidden md:flex items-center gap-1 bg-[#111111] border border-white/[0.08] rounded-full p-1 shadow-md">
@@ -429,7 +474,7 @@ export default function MarketingPage() {
         </div>
 
         {/* Hero Content */}
-        <div className="relative z-10 max-w-4xl mx-auto px-4 sm:px-6 text-center flex flex-col items-center">
+        <div id="hero-content" className="relative z-10 max-w-4xl mx-auto px-4 sm:px-6 text-center flex flex-col items-center">
           {/* Calming Welcome Badge */}
           <motion.div
             initial={{ opacity: 0, y: 12 }}
@@ -815,6 +860,58 @@ export default function MarketingPage() {
           </p>
         </div>
       </footer>
+
+      {/* ═══════════════════════ INTRO SEQUENCE (LASER FLOW) ═══════════════════════ */}
+      <div 
+        id="intro-curtain"
+        className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-[#050505] pointer-events-none"
+      >
+        <div className="absolute inset-0 opacity-60">
+          <LaserFlow 
+            color="#cf9eff" 
+            horizontalBeamOffset={-0.02}
+            verticalBeamOffset={-0.45}
+            horizontalSizing={2}
+            verticalSizing={4.4}
+            wispDensity={2.1}
+            wispSpeed={27}
+            wispIntensity={20}
+            flowSpeed={0.43}
+            flowStrength={0.76}
+            fogIntensity={1}
+            fogScale={0.1}
+            fogFallSpeed={0.26}
+            decay={3}
+            falloffStart={2.01}
+          />
+        </div>
+      </div>
+
+      {/* ═══════════════════════ FLOATING LOGO (SCROLL TRIGGERED) ═══════════════════════ */}
+      <div 
+        id="floating-logo" 
+        className="fixed z-[200] flex items-center origin-top-left pointer-events-none whitespace-nowrap"
+      >
+        <div className="size-24 rounded-3xl bg-teal-400 flex items-center justify-center shadow-[0_0_40px_rgba(45,212,191,0.3)] mr-7">
+          <Activity className="size-12 text-[#07090e]" strokeWidth={3} />
+        </div>
+        <div className="flex items-center font-display font-bold tracking-tight leading-none text-6xl">
+          <BlurText text="Civic" delay={250} animateBy="letters" direction="top" className="text-white mt-1.5" />
+          
+          <RotatingText
+              texts={['Pulse', 'Radar']}
+              mainClassName="ml-3 bg-cyan-400 text-black px-4 pt-2 pb-1 rounded-2xl overflow-hidden flex items-center justify-center leading-none"
+              staggerFrom={"last"}
+              initial={{ y: "100%" }}
+              animate={{ y: 0 }}
+              exit={{ y: "-120%" }}
+              staggerDuration={0.025}
+              splitLevelClassName="overflow-hidden"
+              transition={{ type: "spring", damping: 30, stiffness: 400 }}
+              rotationInterval={4000}
+          />
+        </div>
+      </div>
     </div>
   );
 }

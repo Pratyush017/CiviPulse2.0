@@ -184,21 +184,7 @@ export default function DashboardPage() {
   // --- Highlight Filter State ---
   const [highlightedFilter, setHighlightedFilter] = useState<'active' | 'resolved' | 'attention' | 'critical' | null>(null);
 
-  // --- Intro Animation State ---
-  const [showIntro, setShowIntro] = useState(true);
-  const [showIntroOverlay, setShowIntroOverlay] = useState(true);
   const [mobileView, setMobileView] = useState<'feed' | 'map'>('feed');
-  const [headerScale, setHeaderScale] = useState(0.28);
-
-  useEffect(() => {
-    // Sequence the dashboard intro
-    const t1 = setTimeout(() => setShowIntroOverlay(false), 2000);
-    const t2 = setTimeout(() => setShowIntro(false), 2800);
-    return () => {
-      clearTimeout(t1);
-      clearTimeout(t2);
-    };
-  }, []);
 
   // --- Offline Sync Engine ---
   const { isSyncing, pendingCount } = useBackgroundSync(
@@ -206,12 +192,7 @@ export default function DashboardPage() {
     setToast as (toast: { message: string; type: "success" | "error" | "info" }) => void
   );
 
-  useEffect(() => {
-    const handleResize = () => setHeaderScale(window.innerWidth < 640 ? 0.5 : 0.28);
-    handleResize();
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
+
 
   useEffect(() => {
     if (highlightedFilter) {
@@ -658,89 +639,7 @@ export default function DashboardPage() {
   // --- Render ---
   return (
     <div className="dark">
-      {/* ═══════════════════════ INTRO SEQUENCE ═══════════════════════ */}
-      <AnimatePresence>
-        {showIntroOverlay && (
-          <motion.div
-            initial={{ opacity: 1, clipPath: "inset(0% 0 0% 0)" }}
-            exit={{ opacity: 0, clipPath: "inset(100% 0 0% 0)" }}
-            transition={{ duration: 1.2, ease: "easeInOut" }}
-            className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-[#050505]"
-          >
-            <motion.div 
-              className="absolute inset-0"
-              initial={{ opacity: 0, y: 150 }}
-              animate={{ opacity: 0.6, y: 0 }}
-              transition={{ duration: 1.5, ease: "easeOut" }}
-            >
-              <LaserFlow 
-                color="#cf9eff" 
-                horizontalBeamOffset={-0.02}
-                verticalBeamOffset={-0.45}
-                horizontalSizing={2}
-                verticalSizing={4.4}
-                wispDensity={2.1}
-                wispSpeed={27}
-                wispIntensity={20}
-                flowSpeed={0.43}
-                flowStrength={0.76}
-                fogIntensity={1}
-                fogScale={0.1}
-                fogFallSpeed={0.26}
-                decay={3}
-                falloffStart={2.01}
-              />
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
 
-      {/* ═══════════════════════ FLOATING LOGO ═══════════════════════ */}
-      <motion.div
-        className="fixed z-[200] font-display font-bold text-4xl sm:text-7xl tracking-tight leading-none flex items-center origin-top-left pointer-events-none whitespace-nowrap"
-        initial={false}
-        animate={showIntro ? "center" : "header"}
-        variants={{
-          center: { top: "50%", left: "50%", x: "-50%", y: "-50%", scale: 1 },
-          header: { top: "18px", left: "70px", x: 0, y: 0, scale: headerScale }
-        }}
-        transition={{ duration: 1.2, ease: "easeInOut" }}
-      >
-        {showIntroOverlay ? (
-          <>
-            <BlurText
-              text="Civic"
-              delay={250}
-              animateBy="letters"
-              direction="top"
-              className="text-white mt-1"
-            />
-            <BlurText
-              text="Pulse"
-              delay={250}
-              animateBy="letters"
-              direction="top"
-              className="ml-2 sm:ml-3 bg-cyan-400 text-black px-4 pt-2 pb-1 rounded-xl overflow-hidden flex items-center justify-center leading-none"
-            />
-          </>
-        ) : (
-          <>
-            <span className="text-white mt-1">Civic</span>
-            <RotatingText
-              texts={['Pulse', 'Radar']}
-              mainClassName="ml-2 sm:ml-3 bg-cyan-400 text-black px-4 pt-2 pb-1 rounded-xl overflow-hidden flex items-center justify-center leading-none"
-              staggerFrom={"last"}
-              initial={{ y: "100%" }}
-              animate={{ y: 0 }}
-              exit={{ y: "-120%" }}
-              staggerDuration={0.025}
-              splitLevelClassName="overflow-hidden"
-              transition={{ type: "spring", damping: 30, stiffness: 400 }}
-              rotationInterval={4000}
-            />
-          </>
-        )}
-      </motion.div>
 
       {/* Toast notification */}
       {toast && (
@@ -751,11 +650,8 @@ export default function DashboardPage() {
         />
       )}
 
-      <motion.main 
+      <main 
         className="flex h-screen flex-col overflow-hidden bg-black text-slate-100 transform-gpu"
-        initial={{ opacity: 0, scale: 0.85, filter: "blur(12px)" }}
-        animate={!showIntro ? { opacity: 1, scale: 1, filter: "blur(0px)" } : { opacity: 0, scale: 0.85, filter: "blur(12px)" }}
-        transition={{ duration: 1.2, ease: [0.76, 0, 0.24, 1] }}
       >
         {/* ═══════════════════════ HEADER ═══════════════════════ */}
         <header className="relative z-20 flex items-center justify-between border-b border-[#111111] bg-[#050505] px-6 py-3">
@@ -767,11 +663,22 @@ export default function DashboardPage() {
               </div>
             </div>
             <div>
-              <div className="flex items-center">
-                  {/* Invisible placeholder for the floating logo */}
-                  <div className="w-[120px] h-[28px]" />
+              <div className="flex items-center font-display font-bold text-xl tracking-tight leading-none">
+                <span className="text-white mt-0.5">Civic</span>
+                <RotatingText
+                  texts={['Pulse', 'Radar']}
+                  mainClassName="ml-1.5 bg-cyan-400 text-black px-2 pt-1 pb-0.5 rounded-lg overflow-hidden flex items-center justify-center leading-none"
+                  staggerFrom={"last"}
+                  initial={{ y: "100%" }}
+                  animate={{ y: 0 }}
+                  exit={{ y: "-120%" }}
+                  staggerDuration={0.025}
+                  splitLevelClassName="overflow-hidden"
+                  transition={{ type: "spring", damping: 30, stiffness: 400 }}
+                  rotationInterval={4000}
+                />
               </div>
-              <p className="hidden sm:block text-[9px] md:text-[11px] text-[#7a8199] tracking-wide leading-tight">Community Issue Tracker</p>
+              <p className="hidden sm:block text-[9px] md:text-[11px] text-[#7a8199] tracking-wide leading-tight mt-1">Community Issue Tracker</p>
             </div>
           </div>
 
@@ -1014,7 +921,7 @@ export default function DashboardPage() {
         <motion.div 
           variants={containerVariants}
           initial="hidden"
-          animate={showIntro ? "hidden" : "show"}
+          animate="show"
           className="flex flex-col md:flex-row flex-1 w-full overflow-hidden"
         >
             {/* ────────── LEFT COLUMN: Report Feed (35%) ────────── */}
@@ -1682,7 +1589,7 @@ export default function DashboardPage() {
             </button>
           </div>
         </div>
-      </motion.main>
+      </main>
 
     </div>
   );
