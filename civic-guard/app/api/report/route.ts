@@ -172,69 +172,19 @@ export async function POST(request: NextRequest) {
     }
 
     if (!onnxHandled) {
-      // escalate branch -> fallback to Gemini
-      const genAI = getGeminiClient();
-      if (!genAI) {
-        // No API key — use fallback
-        console.warn("GEMINI_API_KEY not set, using fallback classification");
-        parsed = {
-        isAuthentic: true,
-        fraudReason: null,
-        category: "Uncategorized",
-        title: `Community Issue Report — ${new Date().toLocaleDateString()}`,
-        description: "This report was submitted but could not be analyzed by AI. Manual review required.",
-        severity: "Medium",
-      };
-    } else {
+      // escalate branch -> use ai-router (handles Gemini + Groq fallback)
       try {
-        const response = await withGeminiRetry(() =>
-          genAI.models.generateContent({
-            model: "gemini-2.5-flash",
-            contents: [
-              {
-                role: "user",
-                parts: [
-                  {
-                    text: `You are the primary City Infrastructure Triage Gate. Determine if this image contains a reportable civic defect (e.g., pothole, graffiti). You are a digital forensics expert. You must reject this image if it appears to be a downloaded stock photo, contains watermarks, shows computer screen pixels (moiré effect), or lacks physical realism. Return ONLY a valid JSON object matching the requested schema.`,
-                  },
-                  {
-                    inlineData: {
-                      mimeType,
-                      data: buffer.toString("base64"),
-                    },
-                  },
-                ],
-              },
-            ],
-            config: {
-              responseMimeType: "application/json",
-              responseSchema: zodToGeminiSchema(),
-            },
-          })
-        );
-
-        const rawText = response.text;
-        if (!rawText) {
-          throw new Error("Gemini returned an empty response");
-        }
-
-        // Strict try/catch parsing inside the AI call block
-        parsed = ReportAnalysisSchema.parse(JSON.parse(rawText));
-      } catch (geminiError) {
-        console.error("Gemini API or Parsing failed:", geminiError);
-        const parsedError = parseGeminiError(geminiError);
-        
-        // Don't prepend parsing error string if it's a rate limit issue
-        const errorMessage = parsedError.status === 429 
-          ? parsedError.message 
-          : "AI Parsing Failed: " + parsedError.message;
-          
+        const { analyzeCivicIssue } = await import("@/lib/ai-router");
+        parsed = await analyzeCivicIssue(buffer, mimeType);
+      } catch (aiError) {
+        console.error("AI Triage failed:", aiError);
+        const errorMessage = aiError instanceof Error ? aiError.message : "AI Analysis failed";
+        const status = errorMessage.includes("quota exceeded") || errorMessage.includes("rate limit") ? 429 : 500;
         return NextResponse.json(
           { error: errorMessage },
-          { status: parsedError.status }
+          { status }
         );
       }
-    }
     }
 
     if (!parsed.isAuthentic) {

@@ -109,8 +109,8 @@ Return ONLY a valid JSON object matching the requested schema.`,
     }
   }
 
-  // --- Fallback to Groq (Llama 4 Scout) ---
-  console.log("[AI-Router] Routing Triage to Groq (Llama 4 Scout)...");
+  // --- Fallback to Groq (Qwen 3.6 27B) ---
+  console.log("[AI-Router] Routing Triage to Groq (Qwen 3.6 27B)...");
   const groq = getGroqClient();
   
   if (!groq) {
@@ -118,7 +118,7 @@ Return ONLY a valid JSON object matching the requested schema.`,
   }
 
   const response = await groq.chat.completions.create({
-    model: "meta-llama/llama-4-scout-17b-16e-instruct",
+    model: "qwen/qwen3.6-27b",
     messages: [
       {
         role: "user",

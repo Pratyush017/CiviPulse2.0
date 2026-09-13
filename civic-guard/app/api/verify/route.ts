@@ -260,86 +260,33 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // ---- Initialize Gemini — fail-closed if unavailable ----
-    const genAI = getGeminiClient();
-    if (!genAI) {
-      console.error(
-        "[Stage 4 · Gemini] GEMINI_API_KEY not set — failing closed"
-      );
-      return NextResponse.json(
-        {
-          status: "deferred",
-          reason:
-            "AI verification temporarily unavailable. Your resolution has been queued for manual administrative review.",
-        },
-        { status: 500 }
-      );
-    }
-
-    // ---- Build the image parts for Gemini ----
-    const imageParts: Array<{
-      text?: string;
-      inlineData?: { mimeType: string; data: string };
-    }> = [];
-
-    imageParts.push({
-      text:
-        "Compare these two images. Image 1 is the original report. Image 2 is the claimed resolution. " +
-        "Does Image 2 show that the hazard in Image 1 has been repaired? " +
-        "Answer only YES or NO followed by a one-sentence justification.",
-    });
-
-    // Image 1 — original report (if available)
-    if (originalImageBase64) {
-      imageParts.push({
-        inlineData: {
-          mimeType: originalMimeType,
-          data: originalImageBase64,
-        },
-      });
-    }
-
-    // Image 2 — verification photo
-    imageParts.push({
-      inlineData: {
-        mimeType: verifyMimeType,
-        data: verifyBuffer.toString("base64"),
-      },
-    });
-
     let geminiVerdict: string;
-
     try {
-      const response = await withGeminiRetry(() =>
-        genAI.models.generateContent({
-          model: "gemini-2.5-flash",
-          contents: [
-            {
-              role: "user",
-              parts: imageParts,
-            },
-          ],
-        })
+      const { verifyRepairCompletion } = await import("@/lib/ai-router");
+      const verification = await verifyRepairCompletion(
+        originalImageBase64,
+        originalMimeType,
+        verifyBuffer,
+        verifyMimeType,
+        report.category || "Unknown",
+        report.title || "Untitled",
+        report.description || ""
       );
 
-      const rawText = response.text;
-      if (!rawText) {
-        throw new Error("Gemini returned an empty response");
+      if (!verification.is_same_location) {
+        geminiVerdict = `NO. ${verification.reasoning}`;
+      } else if (!verification.is_resolved) {
+        geminiVerdict = `NO. ${verification.reasoning}`;
+      } else {
+        geminiVerdict = `YES. ${verification.reasoning}`;
       }
-
-      geminiVerdict = rawText.trim();
-      console.log(`[Stage 4 · Gemini] Verdict: "${geminiVerdict}"`);
-    } catch (geminiError) {
-      console.error("[Stage 4 · Gemini] API call failed:", geminiError);
-      const parsedError = parseGeminiError(geminiError);
-
-      // Fail-closed: do not resolve the report if Gemini is unreachable
+    } catch (aiError) {
+      console.error("[Stage 4 · AI-Router] Verification failed:", aiError);
       return NextResponse.json(
         {
           status: "deferred",
-          reason:
-            "AI verification temporarily unavailable. Your resolution has been queued for manual administrative review.",
-          detail: parsedError.message,
+          reason: "AI verification temporarily unavailable. Your resolution has been queued for manual administrative review.",
+          detail: aiError instanceof Error ? aiError.message : "AI fallback failed"
         },
         { status: 500 }
       );
