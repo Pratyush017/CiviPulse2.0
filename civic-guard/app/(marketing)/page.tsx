@@ -451,6 +451,25 @@ export default function MarketingPage() {
 
   return (
     <div id="landing-root" className="min-h-screen bg-[#050505] text-slate-100 font-sans selection:bg-teal-500/30 selection:text-teal-200 overflow-x-hidden">
+      <div className="fixed inset-0 z-[9999] pointer-events-none mix-blend-screen">
+        <LiquidEther
+          colors={['#5227FF', '#FF9FFC', '#B497CF']}
+          mouseForce={20}
+          cursorSize={100}
+          isViscous={false}
+          viscous={30}
+          iterationsViscous={32}
+          iterationsPoisson={52}
+          resolution={0.5}
+          isBounce={false}
+          autoDemo={true}
+          autoSpeed={0.5}
+          autoIntensity={3.9}
+          takeoverDuration={0.25}
+          autoResumeDelay={3000}
+          autoRampDuration={0.6}
+        />
+      </div>
       {/* ═══════════════════════ HEADER ═══════════════════════ */}
       <header className="site-header fixed top-0 left-0 right-0 z-50 transition-all duration-300 px-3 sm:px-6 lg:px-8 pt-2.5 sm:pt-3.5 pointer-events-none">
         <GlassSurface
