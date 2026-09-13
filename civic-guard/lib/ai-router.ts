@@ -326,9 +326,10 @@ export async function generateCityInsights(reportsData: any[]): Promise<CityInsi
   if (groq) {
     try {
       const response = await groq.chat.completions.create({
-        model: "llama-3.3-70b-versatile",
+        model: "openai/gpt-oss-120b",
         messages: [{ role: "user", content: prompt }],
         temperature: 0.2,
+        response_format: { type: "json_object" },
       });
       const cleaned = response.choices[0]?.message?.content?.replace(/```json\n?|```/g, "").trim() || "";
       return CityInsightsSchema.parse(JSON.parse(cleaned));
