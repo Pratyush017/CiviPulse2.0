@@ -390,8 +390,39 @@ export default function DashboardPage() {
       }
 
       // --- Online: Standard submission path ---
+      // 1. Get pre-signed URL
+      const uploadRes = await fetch("/api/upload", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          filename: selectedFile.name || "photo.jpg",
+          contentType: selectedFile.type || "image/jpeg",
+        }),
+      });
+
+      if (!uploadRes.ok) {
+        throw new Error("Failed to get upload URL");
+      }
+
+      const { uploadUrl, finalImageUrl, key } = await uploadRes.json();
+
+      // 2. Upload directly to S3
+      const s3Res = await fetch(uploadUrl, {
+        method: "PUT",
+        headers: {
+          "Content-Type": selectedFile.type || "image/jpeg",
+        },
+        body: selectedFile,
+      });
+
+      if (!s3Res.ok) {
+        throw new Error("Failed to upload image to S3");
+      }
+
+      // 3. Submit report payload to our API
       const formData = new FormData();
-      formData.append("image", selectedFile);
+      formData.append("imageUrl", finalImageUrl);
+      formData.append("imageKey", key);
       formData.append("latitude", String(lat));
       formData.append("longitude", String(lng));
 
@@ -548,8 +579,38 @@ export default function DashboardPage() {
       const compressedBlob = await compressImage(verifyFile);
       const compressedFile = new File([compressedBlob], verifyFile.name, { type: "image/jpeg" });
 
+      // 1. Get pre-signed URL
+      const uploadRes = await fetch("/api/upload", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          filename: compressedFile.name || "verify.jpg",
+          contentType: compressedFile.type || "image/jpeg",
+        }),
+      });
+
+      if (!uploadRes.ok) {
+        throw new Error("Failed to get upload URL");
+      }
+
+      const { uploadUrl, finalImageUrl, key } = await uploadRes.json();
+
+      // 2. Upload to S3
+      const s3Res = await fetch(uploadUrl, {
+        method: "PUT",
+        headers: {
+          "Content-Type": compressedFile.type || "image/jpeg",
+        },
+        body: compressedFile,
+      });
+
+      if (!s3Res.ok) {
+        throw new Error("Failed to upload verification image to S3");
+      }
+
       const formData = new FormData();
-      formData.append("image", compressedFile);
+      formData.append("imageUrl", finalImageUrl);
+      formData.append("imageKey", key);
       formData.append("report_id", verifyingReport.id);
       formData.append("user_lat", String(position.coords.latitude));
       formData.append("user_lng", String(position.coords.longitude));

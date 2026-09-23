@@ -3,8 +3,17 @@ import { Type } from "@google/genai";
 import { z } from "zod";
 import { createClient } from "@/utils/supabase/server";
 import { getGeminiClient, withGeminiRetry, parseGeminiError } from "@/lib/gemini";
+import { S3Client, DeleteObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
 
 export const runtime = "nodejs";
+
+const s3Client = new S3Client({
+  region: process.env.AWS_REGION!,
+  credentials: {
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
+  },
+});
 
 // ---------------------------------------------------------------------------
 // 1. Zod schema — single source of truth for the Gemini response shape
@@ -70,13 +79,14 @@ export async function POST(request: NextRequest) {
 
     // ---- Parse multipart form data ----
     const formData = await request.formData();
-    const imageFile = formData.get("image") as File | null;
+    const imageUrl = formData.get("imageUrl") as string | null;
+    const imageKey = formData.get("imageKey") as string | null;
     const latitude = formData.get("latitude") as string | null;
     const longitude = formData.get("longitude") as string | null;
 
-    if (!imageFile || !latitude || !longitude) {
+    if (!imageUrl || !imageKey || !latitude || !longitude) {
       return NextResponse.json(
-        { error: "Missing required fields: image, latitude, longitude" },
+        { error: "Missing required fields: imageUrl, imageKey, latitude, longitude" },
         { status: 400 }
       );
     }
@@ -91,32 +101,29 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // ---- Read the file into a buffer ----
-    const arrayBuffer = await imageFile.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
-    const mimeType = imageFile.type || "image/jpeg";
-
-    // ---- Upload to Supabase Storage ----
-    const fileName = `${crypto.randomUUID()}.png`;
-
-    const { error: uploadError } = await supabase.storage
-      .from("issue_images")
-      .upload(fileName, buffer, {
-        contentType: mimeType,
-        upsert: false,
+    // ---- Fetch the image from S3 using AWS SDK to perform AI Triage ----
+    let arrayBuffer: ArrayBuffer;
+    let mimeType = "image/jpeg";
+    try {
+      const getCommand = new GetObjectCommand({
+        Bucket: process.env.NEXT_PUBLIC_S3_BUCKET_NAME!,
+        Key: imageKey,
       });
-
-    if (uploadError) {
-      console.error("Supabase upload error:", uploadError);
+      const s3Response = await s3Client.send(getCommand);
+      const byteArray = await s3Response.Body?.transformToByteArray();
+      if (!byteArray) throw new Error("Empty body returned from S3");
+      arrayBuffer = byteArray.buffer;
+      mimeType = s3Response.ContentType || mimeType;
+    } catch (err) {
+      console.error("Failed to fetch image from S3 using SDK:", err);
       return NextResponse.json(
-        { error: "Failed to upload image to storage" },
-        { status: 500 }
+        { error: "Failed to fetch image from S3 for analysis" },
+        { status: 400 }
       );
     }
+    const buffer = Buffer.from(arrayBuffer);
 
-    const {
-      data: { publicUrl },
-    } = supabase.storage.from("issue_images").getPublicUrl(fileName);
+    const publicUrl = imageUrl;
 
     // ---- 1st Stage: Local ONNX Routing ----
     // Dynamic import — onnxruntime-node is unavailable on Vercel (missing
@@ -129,9 +136,13 @@ export async function POST(request: NextRequest) {
       const route = await routeSubmission(buffer);
 
       if (route.action === "reject") {
-        const storageFileName = publicUrl.split('/').pop();
-        if (storageFileName) {
-          await supabase.storage.from("issue_images").remove([storageFileName]);
+        try {
+          await s3Client.send(new DeleteObjectCommand({
+            Bucket: process.env.NEXT_PUBLIC_S3_BUCKET_NAME!,
+            Key: imageKey
+          }));
+        } catch (delErr) {
+          console.error("Failed to delete rejected image from S3:", delErr);
         }
         return NextResponse.json(
           { error: route.reason || "AI Triage Rejected: Invalid civic issue." },
@@ -189,9 +200,13 @@ export async function POST(request: NextRequest) {
 
     if (!parsed.isAuthentic) {
       // Rejection logic & storage cleanup
-      const storageFileName = publicUrl.split('/').pop();
-      if (storageFileName) {
-        await supabase.storage.from("issue_images").remove([storageFileName]);
+      try {
+        await s3Client.send(new DeleteObjectCommand({
+          Bucket: process.env.NEXT_PUBLIC_S3_BUCKET_NAME!,
+          Key: imageKey
+        }));
+      } catch (delErr) {
+        console.error("Failed to delete rejected image from S3:", delErr);
       }
       return NextResponse.json(
         { error: parsed.fraudReason || "AI Triage Rejected: Invalid civic issue." },

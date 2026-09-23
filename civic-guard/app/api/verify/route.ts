@@ -2,8 +2,17 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/utils/supabase/server";
 import { getGeminiClient, withGeminiRetry, parseGeminiError } from "@/lib/gemini";
 import type { ClassName } from "@/lib/classifier";
+import { S3Client, DeleteObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
 
 export const runtime = "nodejs";
+
+const s3Client = new S3Client({
+  region: process.env.AWS_REGION!,
+  credentials: {
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
+  },
+});
 
 // ---------------------------------------------------------------------------
 // 1. Helper — Haversine distance in meters between two GPS points
@@ -62,14 +71,15 @@ export async function POST(request: NextRequest) {
 
     // ---- Parse multipart form data ----
     const formData = await request.formData();
-    const imageFile = formData.get("image") as File | null;
+    const imageUrl = formData.get("imageUrl") as string | null;
+    const imageKey = formData.get("imageKey") as string | null;
     const reportId = formData.get("report_id") as string | null;
     const userLatStr = formData.get("user_lat") as string | null;
     const userLngStr = formData.get("user_lng") as string | null;
 
-    if (!imageFile || !reportId) {
+    if (!imageUrl || !imageKey || !reportId) {
       return NextResponse.json(
-        { error: "Missing required fields: image, report_id" },
+        { error: "Missing required fields: imageUrl, imageKey, report_id" },
         { status: 400 }
       );
     }
@@ -138,10 +148,27 @@ export async function POST(request: NextRequest) {
       `[Stage 1 · GPS] PASSED — distance ${Math.round(distanceMeters)}m`
     );
 
-    // ---- Read the uploaded verification image ----
-    const arrayBuffer = await imageFile.arrayBuffer();
+    // ---- Fetch the verified image from S3 using AWS SDK ----
+    let arrayBuffer: ArrayBuffer;
+    let verifyMimeType = "image/jpeg";
+    try {
+      const getCommand = new GetObjectCommand({
+        Bucket: process.env.NEXT_PUBLIC_S3_BUCKET_NAME!,
+        Key: imageKey,
+      });
+      const s3Response = await s3Client.send(getCommand);
+      const byteArray = await s3Response.Body?.transformToByteArray();
+      if (!byteArray) throw new Error("Empty body returned from S3");
+      arrayBuffer = byteArray.buffer;
+      verifyMimeType = s3Response.ContentType || verifyMimeType;
+    } catch (err) {
+      console.error("Failed to fetch verification image from S3 using SDK:", err);
+      return NextResponse.json(
+        { error: "Failed to fetch verification image from S3" },
+        { status: 400 }
+      );
+    }
     const verifyBuffer = Buffer.from(arrayBuffer);
-    const verifyMimeType = imageFile.type || "image/jpeg";
 
     // =======================================================================
     // STAGE 2 — pHash Duplicate Image Guard (Hamming distance > 5)
@@ -319,23 +346,8 @@ export async function POST(request: NextRequest) {
 
       console.log(`[Stage 4 · Gemini] APPROVED — ${justification}`);
 
-      // Upload verification image to Supabase Storage
-      const fileName = `verify-${crypto.randomUUID()}.png`;
-
-      const { error: uploadError } = await supabase.storage
-        .from("issue_images")
-        .upload(fileName, verifyBuffer, {
-          contentType: verifyMimeType,
-          upsert: false,
-        });
-
-      if (uploadError) {
-        console.error("Supabase upload error:", uploadError);
-        return NextResponse.json(
-          { error: "Failed to upload verification image" },
-          { status: 500 }
-        );
-      }
+      // Image is already uploaded to S3 directly by the client.
+      // Optionally we could save the verify image url to the db, but currently it just ignores it.
 
       // Mark report as resolved
       const { data: updatedReport, error: updateError } = await supabase

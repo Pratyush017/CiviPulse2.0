@@ -83,8 +83,40 @@ export function useBackgroundSync(
             type: payload.imageMimeType,
           });
 
+          // 1. Get pre-signed URL
+          const uploadRes = await fetch("/api/upload", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              filename: file.name,
+              contentType: file.type,
+            }),
+          });
+
+          if (!uploadRes.ok) {
+            console.warn(`[BackgroundSync] Failed to get upload URL for ${key}`);
+            break;
+          }
+
+          const { uploadUrl, finalImageUrl, key: imageKey } = await uploadRes.json();
+
+          // 2. Upload to S3
+          const s3Res = await fetch(uploadUrl, {
+            method: "PUT",
+            headers: {
+              "Content-Type": file.type,
+            },
+            body: file,
+          });
+
+          if (!s3Res.ok) {
+            console.warn(`[BackgroundSync] Failed to upload image to S3 for ${key}`);
+            break;
+          }
+
           const formData = new FormData();
-          formData.append("image", file);
+          formData.append("imageUrl", finalImageUrl);
+          formData.append("imageKey", imageKey);
           formData.append("latitude", String(payload.latitude));
           formData.append("longitude", String(payload.longitude));
 
